@@ -26,9 +26,8 @@ pipeline {
         always {
             cobertura coberturaReportFile: 'target/site/jacoco/jacoco.xml',
                 failBuildIfUnhealthy: false,
-                failBuildIfTotalCoverageLessThan: 0,
+                failBuildIfTotalCoverageLessThan: '0',
                 onlyStable: false,
-                sourceRoot: ''
             archiveArtifacts 'target/site/jacoco/*.html, target/site/jacoco/*.csv'
         }
     }
