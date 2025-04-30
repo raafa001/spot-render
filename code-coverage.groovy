@@ -24,11 +24,13 @@ pipeline {
     }
     post {
         always {
-            cobertura coberturaReportFile: 'target/site/jacoco/jacoco.xml',
-                failBuildIfUnhealthy: false,
-                failBuildIfTotalCoverageLessThan: '0',
-                onlyStable: false,
-            archiveArtifacts 'target/site/jacoco/*.html, target/site/jacoco/*.csv'
+            steps { // Adicione este bloco steps
+                cobertura coberturaReportFile: 'target/site/jacoco/jacoco.xml',
+                    failUnhealthy: false,
+                    conditionalCoverageTargets: '0',
+                    onlyStable: false
+                archiveArtifacts 'target/site/jacoco/*.html, target/site/jacoco/*.csv'
+            }
         }
     }
 }
