@@ -5,58 +5,23 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>com.example</groupId>
-    <artifactId>spot-render</artifactId>
+    <artifactId>iac-project</artifactId>
     <version>1.0-SNAPSHOT</version>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.source>1.8</maven.compiler.source>
         <maven.compiler.target>1.8</maven.compiler.target>
-        <junit.jupiter.version>5.12.0-M1</junit.jupiter.version> <jacoco.maven.plugin.version>0.8.11</jacoco.maven.plugin.version> <maven.compiler.plugin.version>3.13.0</maven.compiler.plugin.version> </properties>
-
-    <dependencies>
-        <dependency>
-            <groupId>org.junit.jupiter</groupId>
-            <artifactId>junit-jupiter-api</artifactId>
-            <version>${junit.jupiter.version}</version>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.junit.jupiter</groupId>
-            <artifactId>junit-jupiter-engine</artifactId>
-            <version>${junit.jupiter.version}</version>
-            <scope>test</scope>
-        </dependency>
-    </dependencies>
+        <jacoco.maven.plugin.version>0.8.11</jacoco.maven.plugin.version>
+    </properties>
 
     <build>
         <plugins>
             <plugin>
-                <groupId>org.jacoco</groupId>
-                <artifactId>jacoco-maven-plugin</artifactId>
-                <version>${jacoco.maven.plugin.version}</version>
-                <executions>
-                    <execution>
-                        <goals>
-                            <goal>prepare-agent</goal>
-                        </goals>
-                    </execution>
-                    <execution>
-                        <id>report</id>
-                        <phase>prepare-package</phase>
-                        <goals>
-                            <goal>report</goal>
-                        </goals>
-                        <configuration>
-                            <formats>
-                                <format>HTML</format>
-                                <format>XML</format>
-                                <format>CSV</format>
-                            </formats>
-                        </configuration>
-                    </execution>
-                </executions>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.13.0</version>
             </plugin>
-        </plugins>
+            </plugins>
     </build>
 </project>
