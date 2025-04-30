@@ -1,4 +1,3 @@
-
 pipeline {
     agent any
     stages {
@@ -11,11 +10,13 @@ pipeline {
         }
         stage('Start Instances') {
             steps {
-                script {
-                    sh '''
-                    chmod +x scripts/start-instances.sh
-                    ./scripts/start-instances.sh
-                    '''
+                withAWS(credentials: 'aws-credentials', region: 'us-east-1') { // Use o ID da sua credencial AWS e a região
+                    script {
+                        sh '''
+                        chmod +x scripts/start-instances.sh
+                        ./scripts/start-instances.sh
+                        '''
+                    }
                 }
             }
         }
