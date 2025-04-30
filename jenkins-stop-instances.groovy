@@ -10,7 +10,7 @@ pipeline {
         }
         stage('Stop Instances') {
             steps {
-                withAWS(credentials: 'aws-credentials', region: 'us-east-1') { // Use o ID da sua credencial AWS e a região
+                withAWS(credentials: 'spot-render', region: 'us-east-1') { // Use o ID da sua credencial AWS e a região
                     script {
                         sh '''
                         chmod +x scripts/stop-instances.sh
