@@ -15,12 +15,12 @@ pipeline {
             steps {
                 echo 'Running security scans using Docker...'
 
-                // Análise de vulnerabilidades para Terraform
+                // Análise de vulnerabilidades para Terraform usando checkov
                 script {
                     try {
-                        sh "docker run --rm -v \"${WORKSPACE}:/src\" accurics/tfsec:latest /src"
+                        sh "docker run --rm -v \"${WORKSPACE}:/src\" bridgecrew/checkov -d /src -f /src/*.tf"
                     } catch (Exception e) {
-                        echo "tfsec scan failed: ${e}"
+                        echo "checkov scan failed: ${e}"
                         // Adicione lógica para falhar o build se necessário
                     }
                 }
