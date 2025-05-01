@@ -1,15 +1,17 @@
 pipeline {
     agent any
     environment {
-        AWS_REGION = 'us-east-1' // Defina sua região da AWS aqui
+        AWS_REGION = 'us-east-1'
     }
     parameters {
         choice(name: 'TERRAFORM_ACTION',
             choices: ['plan', 'apply', 'destroy'],
             description: 'Escolha a ação do Terraform a ser executada')
-        multipleselect(name: 'TERRAFORM_DIRECTORIES',
-            choices: ['kubernetes', 'network', 'permissions', 's3'],
-            description: 'Selecione os diretórios Terraform para executar a ação (selecione múltiplos com Ctrl ou Shift)')
+        extendedChoice(name: 'TERRAFORM_DIRECTORIES',
+            type: 'PT_CHECKBOX', // Ou 'PT_MULTI_SELECT' para uma lista suspensa com seleção múltipla
+            value: 'kubernetes,network,permissions,s3', // Opções separadas por vírgula
+            multiSelectDelimiter: ',',
+            description: 'Selecione os diretórios Terraform para executar a ação (marque as caixas desejadas)')
         booleanParam(name: 'REQUIRE_APPROVAL',
             defaultValue: true,
             description: 'Requer aprovação manual antes de executar o "apply" ou "destroy"')
@@ -29,11 +31,11 @@ pipeline {
             steps {
                 withAWS(credentials: 'aws-credentials', region: env.AWS_REGION) {
                     script {
-                        params.TERRAFORM_DIRECTORIES.each { tf_dir ->
-                            echo "------------------- Terraform Plan: ${tf_dir} -------------------"
-                            sh "cd terraform/${tf_dir} && terraform init"
-                            sh "cd terraform/${tf_dir} && terraform plan -no-color -out=${tf_dir}.plan"
-                            archiveArtifacts "terraform/${tf_dir}/*.plan"
+                        params.TERRAFORM_DIRECTORIES.split(',').each { tf_dir ->
+                            echo "------------------- Terraform Plan: ${tf_dir.trim()} -------------------"
+                            sh "cd terraform/${tf_dir.trim()} && terraform init"
+                            sh "cd terraform/${tf_dir.trim()} && terraform plan -no-color -out=${tf_dir.trim()}.plan"
+                            archiveArtifacts "terraform/${tf_dir.trim()}/*.plan"
                         }
                     }
                 }
@@ -54,13 +56,13 @@ pipeline {
             steps {
                 withAWS(credentials: 'aws-credentials', region: env.AWS_REGION) {
                     script {
-                        params.TERRAFORM_DIRECTORIES.each { tf_dir ->
-                            echo "------------------- Terraform ${params.TERRAFORM_ACTION}: ${tf_dir} -------------------"
-                            sh "cd terraform/${tf_dir} && terraform init"
+                        params.TERRAFORM_DIRECTORIES.split(',').each { tf_dir ->
+                            echo "------------------- Terraform ${params.TERRAFORM_ACTION}: ${tf_dir.trim()} -------------------"
+                            sh "cd terraform/${tf_dir.trim()} && terraform init"
                             if (params.TERRAFORM_ACTION == 'apply') {
-                                sh "cd terraform/${tf_dir} && terraform apply -auto-approve ${tf_dir}.plan"
+                                sh "cd terraform/${tf_dir.trim()} && terraform apply -auto-approve ${tf_dir.trim()}.plan"
                             } else if (params.TERRAFORM_ACTION == 'destroy') {
-                                sh "cd terraform/${tf_dir} && terraform destroy -auto-approve"
+                                sh "cd terraform/${tf_dir.trim()} && terraform destroy -auto-approve"
                             }
                         }
                     }
