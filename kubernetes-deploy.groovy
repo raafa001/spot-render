@@ -10,7 +10,7 @@ pipeline {
         }
         stage('Deploy Monitoring') {
             steps {
-                withAWS(credentials: 'aws-credentials', region: 'us-east-1') {
+                withAWS(credentials: 'spot-render', region: 'us-east-1') {
                     script {
                         echo 'Applying Grafana and Prometheus manifests...'
                         sh 'kubectl create namespace monitoring --dry-run=client -o yaml | kubectl apply -f -'
