@@ -2,7 +2,7 @@ terraform {
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = "~> 5.0" # Usando a versão mais recente da AWS Provider (maior que 5.0)
+      version = "~> 5.0"
     }
   }
   required_version = ">= 1.1"
@@ -10,7 +10,7 @@ terraform {
 
 module "eks" {
   source  = "terraform-aws-modules/eks/aws"
-  version = "20.36.0" # **Versão mais recente do módulo EKS**
+  version = "20.36.0"
   count   = var.deploy_kubernetes ? 1 : 0
 
   cluster_name    = var.cluster_name
@@ -64,7 +64,7 @@ variable "cluster_name" {
 
 variable "cluster_version" {
   type    = string
-  default = "1.27"
+  default = "1.32"
 }
 
 variable "tags" {
@@ -92,8 +92,8 @@ variable "eks_node_groups" {
       desired_capacity = 2
       max_capacity     = 3
       min_capacity     = 1
-      instance_type    = "g4dn.xlarge" # Exemplo de instância com GPU
-      k8s_version      = "1.27"
+      instance_type    = "g5dn.large"
+      k8s_version      = "1.32"
       capacity_type    = "SPOT"
       update_policy     = "Auto"
       tags = {
@@ -115,7 +115,7 @@ output "subnet_ids" {
 }
 
 output "eks_cluster_id" {
-  value = module.eks[0].eks_cluster_id # **Acessando o output correto na versão mais recente**
+  value = module.eks[0].eks_cluster_id
 }
 
 output "s3_source_bucket_arn" {
