@@ -104,13 +104,13 @@ output "subnet_ids" {
 }
 
 output "eks_cluster_id" {
-  value = module.eks[0].cluster_id # **Corrigido: Assumindo que o módulo 'eks' exporta 'cluster_id'**
+  value = module.eks[0].eks.cluster_id
 }
 
 output "s3_source_bucket_arn" {
-  value = module.s3[0].s3_bucket_arn # **Corrigido: Assumindo que o módulo 's3' exporta 's3_bucket_arn'**
+  value = module.s3[0].s3_bucket_arn
 }
 
 output "s3_output_bucket_arn" {
-  value = module.s3[0].s3_bucket_arn # **Corrigido: Assumindo que o módulo 's3' exporta 's3_bucket_arn'**
+  value = module.s3[0].s3_bucket_arn
 }
