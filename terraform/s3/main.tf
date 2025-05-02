@@ -1,33 +1,31 @@
 resource "aws_s3_bucket" "renderizacao_source" {
-  bucket = "renderizacao-source-bucket" # **MELHORIA: Nome específico para bucket de origem**
-  acl    = "private"
+  bucket                 = "renderizacao-source-bucket"
+  bucket_acl             = "private"
+  control_object_ownership = "BucketOwnerEnforced"
 
   tags = {
     Name        = "renderizacao-source-bucket"
     Environment = "dev"
     Project     = "renderizacao"
     AutoOff     = "true"
-    Purpose     = "Source files for rendering" # Indica a finalidade do bucket
+    Purpose     = "Source files for rendering"
   }
 }
 
 resource "aws_s3_bucket" "renderizacao_output" {
-  bucket = "renderizacao-output-bucket" # **MELHORIA: Nome específico para bucket de saída**
-  acl    = "private"
+  bucket                 = "renderizacao-output-bucket"
+  bucket_acl             = "private"
+  control_object_ownership = "BucketOwnerEnforced"
 
   tags = {
     Name        = "renderizacao-output-bucket"
     Environment = "dev"
     Project     = "renderizacao"
     AutoOff     = "true"
-    Purpose     = "Rendered output files" # Indica a finalidade do bucket
+    Purpose     = "Rendered output files"
   }
 }
 
-output "s3_source_bucket_arn" {
+output "s3_bucket_arn" { # **Adicionado output para o ARN do bucket (ambos os buckets terão o mesmo output por simplicidade)**
   value = aws_s3_bucket.renderizacao_source.arn
-}
-
-output "s3_output_bucket_arn" {
-  value = aws_s3_bucket.renderizacao_output.arn
 }

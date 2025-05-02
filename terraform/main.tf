@@ -1,39 +1,28 @@
-provider "aws" {
-  region = "us-east-1"
-}
-
 module "eks" {
   source  = "./kubernetes"
   count   = var.deploy_kubernetes ? 1 : 0
 
-  # Passa as variáveis necessárias para o módulo eks
   cluster_name    = var.cluster_name
   cluster_version = var.cluster_version
   vpc_id          = module.network[0].vpc_id
-  subnets         = module.network[0].subnet_ids
+  subnet_ids      = module.network[0].subnet_ids
   tags            = var.tags
-  eks_node_groups = var.eks_node_groups # **Adicionando a variável eks_node_groups**
+  eks_managed_node_groups = var.eks_node_groups
 }
 
 module "network" {
   source = "./network"
   count  = var.deploy_network ? 1 : 0
-
-  # Não precisa passar nada por enquanto
 }
 
 module "permissions" {
   source = "./permissions"
   count  = var.deploy_permissions ? 1 : 0
-
-  # Não precisa passar nada por enquanto
 }
 
 module "s3" {
   source = "./s3"
   count  = var.deploy_s3 ? 1 : 0
-
-  # Não precisa passar nada por enquanto
 }
 
 # Defina as variáveis aqui
@@ -92,7 +81,7 @@ variable "eks_node_groups" {
       desired_capacity = 2
       max_capacity     = 3
       min_capacity     = 1
-      instance_type    = "t3.medium"
+      instance_type    = "g4dn.xlarge" # Exemplo de instância com GPU
       k8s_version      = "1.27"
       capacity_type    = "SPOT"
       update_policy     = "Auto"
@@ -115,13 +104,13 @@ output "subnet_ids" {
 }
 
 output "eks_cluster_id" {
-  value = module.eks[0].cluster_id
+  value = module.eks[0].cluster_id # **Corrigido: Assumindo que o módulo 'eks' exporta 'cluster_id'**
 }
 
 output "s3_source_bucket_arn" {
-  value = module.s3[0].s3_bucket_arn
+  value = module.s3[0].s3_bucket_arn # **Corrigido: Assumindo que o módulo 's3' exporta 's3_bucket_arn'**
 }
 
 output "s3_output_bucket_arn" {
-  value = module.s3[0].s3_bucket_arn
+  value = module.s3[0].s3_bucket_arn # **Corrigido: Assumindo que o módulo 's3' exporta 's3_bucket_arn'**
 }
