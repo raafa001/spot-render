@@ -115,7 +115,7 @@ output "subnet_ids" {
 }
 
 output "eks_cluster_id" {
-  value = module.eks[0].eks_cluster_id
+  value = module.eks.0.eks_cluster_id
 }
 
 output "s3_source_bucket_arn" {
