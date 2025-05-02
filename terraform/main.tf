@@ -1,3 +1,7 @@
+provider "aws" {
+  region = "us-east-1"
+}
+
 module "eks" {
   source  = "./kubernetes"
   count   = var.deploy_kubernetes ? 1 : 0
