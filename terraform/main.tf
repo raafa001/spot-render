@@ -1,13 +1,18 @@
+provider "aws" {
+  region = "us-east-1"
+}
+
 module "eks" {
   source  = "./kubernetes"
   count   = var.deploy_kubernetes ? 1 : 0
 
+  # Passa as variáveis necessárias para o módulo eks
   cluster_name    = var.cluster_name
   cluster_version = var.cluster_version
   vpc_id          = module.network[0].vpc_id
-  subnet_ids      = module.network[0].subnet_ids
+  subnets         = module.network[0].subnet_ids
   tags            = var.tags
-  eks_managed_node_groups = var.eks_node_groups
+  eks_node_groups = var.eks_node_groups # **Adicionando a variável eks_node_groups**
 }
 
 module "network" {
