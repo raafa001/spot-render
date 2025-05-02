@@ -1,18 +1,24 @@
-provider "aws" {
-  region = "us-east-1"
+terraform {
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0" # Usando a versão mais recente da AWS Provider (maior que 5.0)
+    }
+  }
+  required_version = ">= 1.1"
 }
 
 module "eks" {
-  source  = "./kubernetes"
+  source  = "terraform-aws-modules/eks/aws"
+  version = "20.36.0" # **Versão mais recente do módulo EKS**
   count   = var.deploy_kubernetes ? 1 : 0
 
-  # Passa as variáveis necessárias para o módulo eks
   cluster_name    = var.cluster_name
   cluster_version = var.cluster_version
   vpc_id          = module.network[0].vpc_id
-  subnets         = module.network[0].subnet_ids
+  subnet_ids      = module.network[0].subnet_ids
   tags            = var.tags
-  eks_node_groups = var.eks_node_groups # **Adicionando a variável eks_node_groups**
+  eks_managed_node_groups = var.eks_node_groups
 }
 
 module "network" {
@@ -30,7 +36,7 @@ module "s3" {
   count  = var.deploy_s3 ? 1 : 0
 }
 
-# Defina as variáveis aqui
+# Definição das variáveis (mantendo as existentes)
 variable "deploy_kubernetes" {
   type    = bool
   default = true
@@ -99,7 +105,7 @@ variable "eks_node_groups" {
   }
 }
 
-# Outputs para acessar informações dos módulos
+# Outputs (ajustando para a nova versão do módulo EKS)
 output "vpc_id" {
   value = module.network[0].vpc_id
 }
@@ -109,7 +115,7 @@ output "subnet_ids" {
 }
 
 output "eks_cluster_id" {
-  value = module.eks.0.eks_cluster_id
+  value = module.eks[0].eks_cluster_id # **Acessando o output correto na versão mais recente**
 }
 
 output "s3_source_bucket_arn" {

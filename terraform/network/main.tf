@@ -15,7 +15,7 @@ resource "aws_security_group" "eks_cluster_sg" {
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"] # **MELHORIA: Restringir IPs de acesso**
+    cidr_blocks = ["162.120.185.0/16"]
     description = "Allow HTTPS access to EKS API"
   }
 
@@ -23,7 +23,7 @@ resource "aws_security_group" "eks_cluster_sg" {
     from_port   = 3000 # Porta padrão do Grafana
     to_port     = 3000
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"] # **MELHORIA: Restringir IPs de acesso**
+    cidr_blocks = ["162.120.185.0/16"]
     description = "Allow access to Grafana"
   }
 
