@@ -23,6 +23,7 @@ pipeline {
                         sh 'kubectl apply -f kubernetes/grafana-datasource.yaml -n monitoring'
                         sh 'kubectl apply -f kubernetes/grafana-dashboard-provider.yaml -n monitoring'
                         sh 'kubectl apply -f kubernetes/grafana-dashboards.yaml -n monitoring'
+                        sh 'kubectl apply -f kubernetes/network-policy.yaml -n monitoring'
                     }
                 }
             }
