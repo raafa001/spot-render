@@ -1,0 +1,123 @@
+name: Kubernetes Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment
+        required: true
+        type: choice
+        options:
+          - dev
+          - production
+      namespace:
+        description: Kubernetes namespace
+        required: true
+        default: monitoring
+      dry-run:
+        description: Dry run (validate only)
+        required: true
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  AWS_REGION: us-east-1
+
+jobs:
+  validate:
+    name: Validate Manifests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Check K8s manifests exist
+        run: |
+          expected=(
+            "kubernetes/namespaces.yaml"
+            "kubernetes/grafana-deployment.yaml"
+            "kubernetes/grafana-service.yaml"
+            "kubernetes/prometheus-deployment.yaml"
+            "kubernetes/prometheus-service.yaml"
+            "kubernetes/prometheus-configmap.yaml"
+            "kubernetes/prometheus-rules.yaml"
+            "kubernetes/prometheus-datasource.yaml"
+            "kubernetes/prometheus-dashboard-provider.yaml"
+            "kubernetes/prometheus-dashboards.yaml"
+            "kubernetes/network-policy.yaml"
+          )
+          for f in "${expected[@]}"; do
+            if [ ! -f "$f" ]; then
+              echo "::error::Missing manifest: $f"
+              exit 1
+            fi
+          done
+          echo "All manifests present."
+
+  deploy:
+    name: Deploy
+    needs: validate
+    runs-on: ubuntu-latest
+    if: ${{ !inputs.dry-run }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Update kubeconfig
+        run: aws eks update-kubeconfig --name ${{ secrets.EKS_CLUSTER_NAME }} --region ${{ env.AWS_REGION }}
+
+      - name: Create namespace if not exists
+        run: kubectl create namespace ${{ inputs.namespace }} --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Apply manifests
+        run: |
+          manifests=(
+            "kubernetes/grafana-deployment.yaml"
+            "kubernetes/grafana-service.yaml"
+            "kubernetes/prometheus-deployment.yaml"
+            "kubernetes/prometheus-service.yaml"
+            "kubernetes/prometheus-configmap.yaml"
+            "kubernetes/prometheus-rules.yaml"
+            "kubernetes/prometheus-datasource.yaml"
+            "kubernetes/prometheus-dashboard-provider.yaml"
+            "kubernetes/prometheus-dashboards.yaml"
+            "kubernetes/network-policy.yaml"
+          )
+          for manifest in "${manifests[@]}"; do
+            kubectl apply -f "$manifest" -n ${{ inputs.namespace }}
+          done
+
+      - name: Verify deployment
+        run: |
+          kubectl get pods -n ${{ inputs.namespace }}
+          kubectl get svc -n ${{ inputs.namespace }}
+
+  dry-run:
+    name: Dry Run
+    needs: validate
+    runs-on: ubuntu-latest
+    if: ${{ inputs.dry-run }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Validate YAML syntax
+        run: |
+          for f in kubernetes/*.yaml; do
+            python3 -c "import yaml; yaml.safe_load(open('$f')); print('✅ $f: valid YAML')" || exit 1
+          done
+
+      - name: Show manifests summary
+        run: |
+          echo "## Dry Run Summary" >> $GITHUB_STEP_SUMMARY
+          for f in kubernetes/*.yaml; do
+            resources=$(grep -c "^kind:" "$f" || true)
+            echo "- $f ($resources resources)" >> $GITHUB_STEP_SUMMARY
+          done
