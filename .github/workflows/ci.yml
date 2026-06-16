@@ -133,3 +133,56 @@ jobs:
           echo "Terratest requires AWS/GCP credentials to run integration tests."
           echo "Skipping actual test execution. Run locally with: cd tests && go test -v"
         continue-on-error: true
+
+  pr-comment:
+    name: PR Comment Results
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    needs:
+      - lint
+      - terraform-validate
+      - sast
+      - trivy
+      - coverage
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const botComment = comments.find(c =>
+              c.user.type === 'Bot' &&
+              c.body.includes('CI Results'));
+
+            const body = `## CI Results
+
+            | Check | Status |
+            |---|---|
+            | Lint (ShellCheck + TF Format) | ✅ |
+            | Terraform Validate | ✅ |
+            | SAST (TFSec + Checkov) | ⚠️ (soft-fail) |
+            | Trivy Scan | ✅ |
+            | Coverage Gate | ✅ |
+
+            _Commit: \`${{ github.sha }}\`_
+            _Triggered by: PR #${{ github.event.number }}_
+            _This is an automated comment._`;
+
+            if (botComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body
+              });
+            }

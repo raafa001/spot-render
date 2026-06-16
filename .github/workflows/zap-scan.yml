@@ -1,0 +1,45 @@
+name: DAST Scan
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Target URL
+        required: true
+        default: "https://monitoring.example.com"
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  zap-scan:
+    name: OWASP ZAP Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: ZAP Full Scan
+        uses: zaproxy/action-full-scan@v0
+        with:
+          target: ${{ github.event.inputs.target || 'https://monitoring.example.com' }}
+          cmd_options: "-a"
+          issue_title: "DAST Scan Report - spot-render"
+          fail_action: false
+
+      - name: Upload ZAP Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zap-report
+          path: report.*
+          retention-days: 30
+
+      - name: Upload SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: results.sarif
+        continue-on-error: true
