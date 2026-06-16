@@ -1,0 +1,58 @@
+name: Instance Scheduler
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: Action
+        required: true
+        type: choice
+        options:
+          - start
+          - stop
+      aws-region:
+        description: AWS Region
+        required: true
+        default: us-east-1
+  schedule:
+    - cron: "0 8 * * 1-5"
+    - cron: "0 20 * * 1-5"
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  AWS_REGION: ${{ inputs.aws-region || 'us-east-1' }}
+
+jobs:
+  schedule:
+    name: Schedule Instances
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Determine action
+        id: action
+        run: |
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            HOUR=$(date +%H)
+            if [ "$HOUR" = "08" ]; then
+              echo "action=start" >> $GITHUB_OUTPUT
+            else
+              echo "action=stop" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "action=${{ inputs.action }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: ${{ steps.action.outputs.action == 'start' && 'Start' || 'Stop' }} instances
+        run: |
+          chmod +x scripts/${{ steps.action.outputs.action }}-instances.sh
+          ./scripts/${{ steps.action.outputs.action }}-instances.sh

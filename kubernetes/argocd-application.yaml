@@ -1,0 +1,21 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: spot-render-monitoring
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/raafa001/spot-render.git
+    targetRevision: main
+    path: kubernetes
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ApplyOutOfSyncOnly=true

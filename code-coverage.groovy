@@ -1,3 +1,7 @@
+// OBSOLETO - Jenkins removido/desativado
+// Substituido por: .github/workflows/ci.yml (contem ShellCheck, Checkov, Trivy, TFSec)
+// Mantido apenas como referencia.
+
 pipeline {
     agent any
 

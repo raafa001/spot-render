@@ -1,3 +1,7 @@
+// OBSOLETO - Jenkins removido/desativado
+// Substituido por: .github/workflows/terraform-automation.yml
+// Mantido apenas como referencia.
+
 pipeline {
     agent any
 

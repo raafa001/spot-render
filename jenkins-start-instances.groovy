@@ -1,3 +1,7 @@
+// OBSOLETO - Jenkins removido/desativado
+// Substituido por: .github/workflows/instance-scheduler.yml
+// Mantido apenas como referencia.
+
 pipeline {
     agent any
 
