@@ -16,7 +16,7 @@ jobs:
     name: Lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: ShellCheck
         uses: ludeeus/action-shellcheck@master
@@ -45,7 +45,7 @@ jobs:
           - terraform/permissions
           - terraform/s3
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v4
@@ -64,7 +64,7 @@ jobs:
     name: SAST
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: TFSec
         uses: aquasecurity/tfsec-action@v1.0.3
@@ -83,7 +83,7 @@ jobs:
     name: Trivy
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Trivy Filesystem Scan
         uses: aquasecurity/trivy-action@master
@@ -97,7 +97,7 @@ jobs:
     name: Coverage
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Verify Terraform Module Outputs
         run: |
@@ -116,7 +116,7 @@ jobs:
     name: Terratest
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Setup Go
         uses: actions/setup-go@v6
