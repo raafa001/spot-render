@@ -1,0 +1,4 @@
+github.com/gruntwork-io/terratest v0.47.2 h1:7ef2hP2jfT13e2Fq9vsWm9OjYx1jOVNqFCm3NFlgnV8=
+github.com/gruntwork-io/terratest v0.47.2/go.mod h1:L+1iR0VJhDm8p3JQQIgV0XIglCIb+8UuKZPR7K3C9nA=
+github.com/stretchr/testify v1.9.0 h1:aMqOF7/hLKTqN0dQ/r5CL2KbPJVXfdTRoD8gNKKc0Sw=
+github.com/stretchr/testify v1.9.0/go.mod h1:r2ic/lqez/lE8LZ/AVQkWzB2+Wx7qB1OYHgP0d3I2Mk=
