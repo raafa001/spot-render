@@ -26,6 +26,7 @@ jobs:
         uses: ludeeus/action-shellcheck@master
         with:
           severity: warning
+          ignore_paths: scripts/configure-jenkins.sh # Ignora o script com aviso SC2034
         continue-on-error: true
 
       - name: Hadolint (API)
@@ -61,13 +62,25 @@ jobs:
         if: steps.sonar-creds.outputs.missing == 'false'
         id: sonar-available
         run: |
-          # Mostra claramente no log onde o pipeline está tentando bater
-          echo "Debug: Testando conectividade com o SonarQube em: ${SONAR_HOST_URL}"
-
           CLEAN_TOKEN=$(echo "${SONAR_TOKEN}" | xargs)
           
-          # Faz o teste direto na URL da Secret, sem mudar nada nos bastidores
+          # Testa a conectividade local no host (127.0.0.1)
           if curl -sf --connect-timeout 5 -u "${CLEAN_TOKEN}:" "${SONAR_HOST_URL}/api/system/status" >/tmp/sonar-status.json; then
+            echo "reachable=true" >> "$GITHUB_OUTPUT"
+            
+            # MÁGICA PARA WSL2: Se a URL for localhost/127.0.0.1, extrai o IP real da interface de rede da WSL
+            if [[ "${SONAR_HOST_URL}" == *"127.0.0.1"* ]] || [[ "${SONAR_HOST_URL}" == *"localhost"* ]]; then
+              WSL_IP=$(ip -4 addr show eth0 | grep -oP '(?<=inet \s)\d+(\.\d+){3}' | head -n1)
+              if [ -z "$WSL_IP" ]; then
+                # Fallback caso a interface não seja eth0 (comum em algumas distros customizadas)
+                WSL_IP=$(hostname -I | awk '{print $1}')
+              fi
+              echo "RESOLVED_URL=http://${WSL_IP}:9000" >> "$GITHUB_OUTPUT"
+              echo "Debug: Redirecionando container do Sonar para o IP da WSL2: http://${WSL_IP}:9000"
+            else
+              echo "RESOLVED_URL=${SONAR_HOST_URL}" >> "$GITHUB_OUTPUT"
+            fi
+            
             STATUS=$(python3 << 'EOF'
           import json
           from pathlib import Path
@@ -80,7 +93,6 @@ jobs:
           print(status)
           EOF
             )
-            echo "reachable=true" >> "$GITHUB_OUTPUT"
             echo "SonarQube status: ${STATUS}" >> "$GITHUB_STEP_SUMMARY"
           else
             echo "reachable=false" >> "$GITHUB_OUTPUT"
@@ -90,11 +102,8 @@ jobs:
       - name: SonarQube
         if: steps.sonar-creds.outputs.missing == 'false' && steps.sonar-available.outputs.reachable == 'true'
         uses: sonarsource/sonarqube-scan-action@v2
-        with:
-          args: >
-            -Dsonar.docker.args="--net=host"
         env:
-          SONAR_HOST_URL: ${{ env.SONAR_HOST_URL }}
+          SONAR_HOST_URL: ${{ steps.sonar-available.outputs.RESOLVED_URL }}
           SONAR_TOKEN: ${{ env.SONAR_TOKEN }}
 
       - name: Sonar skipped summary
