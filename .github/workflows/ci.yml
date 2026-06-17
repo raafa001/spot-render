@@ -62,7 +62,8 @@ jobs:
         id: sonar-available
         run: |
           if curl -sf --connect-timeout 5 "${SONAR_HOST_URL}/api/system/status" >/tmp/sonar-status.json; then
-            STATUS=$(python3 - <<'PY'
+            STATUS=$(
+              python3 <<'PY'
 import json
 from pathlib import Path
 
@@ -75,7 +76,7 @@ except Exception:
 
 print(status)
 PY
-)
+            )
             echo "reachable=true" >> "$GITHUB_OUTPUT"
             echo "SonarQube status: ${STATUS}" >> "$GITHUB_STEP_SUMMARY"
           else
