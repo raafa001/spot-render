@@ -11,7 +11,6 @@ permissions:
   checks: write
   pull-requests: write
 
-
 env:
   SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
   SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
@@ -63,17 +62,17 @@ jobs:
         id: sonar-available
         run: |
           if curl -sf --connect-timeout 5 "${SONAR_HOST_URL}/api/system/status" >/tmp/sonar-status.json; then
-            STATUS=$(python3 <<'PY'
-import json
-from pathlib import Path
-status = "unknown"
-try:
-    data = json.loads(Path('/tmp/sonar-status.json').read_text())
-    status = data.get('status', 'unknown')
-except Exception:
-    pass
-print(status)
-PY
+            STATUS=$(python3 << 'EOF'
+          import json
+          from pathlib import Path
+          status = "unknown"
+          try:
+              data = json.loads(Path('/tmp/sonar-status.json').read_text())
+              status = data.get('status', 'unknown')
+          except Exception:
+              pass
+          print(status)
+          EOF
             )
             echo "reachable=true" >> "$GITHUB_OUTPUT"
             echo "SonarQube status: ${STATUS}" >> "$GITHUB_STEP_SUMMARY"
@@ -235,54 +234,4 @@ PY
             const { data: comments } = await github.rest.issues.listComments({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              issue_number: context.issue.number,
-            });
-            const botComment = comments.find(c =>
-              c.user.type === 'Bot' &&
-              c.body.includes('CI Results'));
-
-            const body = `## CI Results
-
-            | Check | Status |
-            |---|---|
-            | Lint (ShellCheck + Hadolint) | ✅ |
-            | SonarQube Scan | ✅ |
-            | Trivy Filesystem | ✅ |
-            | Unit Tests | ✅ |
-
-            _Commit: \`${{ github.sha }}\`_
-            _Triggered by: PR #${{ github.event.number }}_
-            _This is an automated comment._`;
-
-            if (botComment) {
-              await github.rest.issues.updateComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                comment_id: botComment.id,
-                body
-              });
-            } else {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: context.issue.number,
-                body
-              });
-            }
-
-  gitops-trigger:
-    name: ArgoCD Sync
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    needs:
-      - docker-build
-    steps:
-      - name: Trigger ArgoCD webhook
-        env:
-          ARGOCD_WEBHOOK_URL: ${{ secrets.ARGOCD_WEBHOOK_URL }}
-          API_IMAGE: ${{ needs.docker-build.outputs.api_image }}
-          WORKER_IMAGE: ${{ needs.docker-build.outputs.worker_image }}
-        run: |
-          curl -X POST "$ARGOCD_WEBHOOK_URL" \
-            -H 'Content-Type: application/json' \
-            -d "{\"ref\":\"$GITHUB_REF\",\"commit\":\"$GITHUB_SHA\",\"images\":{\"api\":\"$API_IMAGE\",\"worker\":\"$WORKER_IMAGE\"}}"
+              issue_number: context.
