@@ -179,7 +179,7 @@ PY
       - name: Define image targets
         id: images
         run: |
-          SHA=${GITHUB_SHA::7}
+          SHA=${GITHUB_SHA:0:7}
           if [[ "${GITHUB_REF}" == "refs/heads/main" ]]; then
             REGISTRY="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
           else
@@ -279,7 +279,9 @@ PY
       - name: Trigger ArgoCD webhook
         env:
           ARGOCD_WEBHOOK_URL: ${{ secrets.ARGOCD_WEBHOOK_URL }}
+          API_IMAGE: ${{ needs.docker-build.outputs.api_image }}
+          WORKER_IMAGE: ${{ needs.docker-build.outputs.worker_image }}
         run: |
           curl -X POST "$ARGOCD_WEBHOOK_URL" \
             -H 'Content-Type: application/json' \
-            -d '{"ref":"'"${GITHUB_REF}"'","commit":"'"${GITHUB_SHA}"'","images":{"api":"'"${{ needs.docker-build.outputs.api_image }}"'","worker":"'"${{ needs.docker-build.outputs.worker_image }}"'"}}'
+            -d "{\"ref\":\"$GITHUB_REF\",\"commit\":\"$GITHUB_SHA\",\"images\":{\"api\":\"$API_IMAGE\",\"worker\":\"$WORKER_IMAGE\"}}"
