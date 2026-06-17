@@ -83,16 +83,16 @@ jobs:
               issue_number: prNum,
               body: `## Terraform ${cmd} — Confirmation Required
 
-To ${cmd} infrastructure, use **workflow_dispatch**:
+              To ${cmd} infrastructure, use **workflow_dispatch**:
 
-1. Go to [Terraform Automation Action](${runUrl})
-2. Click **Run workflow**
-3. Set \`command\` to \`${cmd}\`
-4. Set \`confirm\` to \`yes\`
-5. Select the target \`working-dir\`
-6. Click **Run workflow**
+              1. Go to [Terraform Automation Action](${runUrl})
+              2. Click **Run workflow**
+              3. Set \`command\` to \`${cmd}\`
+              4. Set \`confirm\` to \`yes\`
+              5. Select the target \`working-dir\`
+              6. Click **Run workflow**
 
-⚠️ This will ${cmd} infrastructure. Double-check the plan first!`
+              ⚠️ This will ${cmd} infrastructure. Double-check the plan first!`
             });
 
   manual:
