@@ -50,7 +50,6 @@ jobs:
       - name: Check Sonar credentials
         id: sonar-creds
         run: |
-          # Aspas duplas ao redor das variáveis impedem o erro "binary operator expected"
           if [ -z "${SONAR_HOST_URL}" ] || [ -z "${SONAR_TOKEN}" ]; then
             echo "missing=true" >> "$GITHUB_OUTPUT"
             echo "::warning::SONAR_HOST_URL/SONAR_TOKEN não configurados. SonarQube será ignorado."
@@ -62,16 +61,13 @@ jobs:
         if: steps.sonar-creds.outputs.missing == 'false'
         id: sonar-available
         run: |
-          # Resolve o problema de loopback do Docker na WSL2 limpando a URL se necessário
-          TARGET_URL="${SONAR_HOST_URL}"
-          if [[ "${TARGET_URL}" == *"localhost"* ]] || [[ "${TARGET_URL}" == *"127.0.0.1"* ]]; then
-            TARGET_URL="http://host.docker.internal:9000"
-            echo "Ajustando URL para comunicação interna de container Docker na WSL2: ${TARGET_URL}"
-          fi
+          # Mostra claramente no log onde o pipeline está tentando bater
+          echo "Debug: Testando conectividade com o SonarQube em: ${SONAR_HOST_URL}"
 
-          # Executa o curl validando o token de forma segura contra espaços espúrios
           CLEAN_TOKEN=$(echo "${SONAR_TOKEN}" | xargs)
-          if curl -sf --connect-timeout 5 -u "${CLEAN_TOKEN}:" "${TARGET_URL}/api/system/status" >/tmp/sonar-status.json; then
+          
+          # Faz o teste direto na URL da Secret, sem mudar nada nos bastidores
+          if curl -sf --connect-timeout 5 -u "${CLEAN_TOKEN}:" "${SONAR_HOST_URL}/api/system/status" >/tmp/sonar-status.json; then
             STATUS=$(python3 << 'EOF'
           import json
           from pathlib import Path
@@ -85,11 +81,10 @@ jobs:
           EOF
             )
             echo "reachable=true" >> "$GITHUB_OUTPUT"
-            echo "resolved_url=${TARGET_URL}" >> "$GITHUB_OUTPUT"
             echo "SonarQube status: ${STATUS}" >> "$GITHUB_STEP_SUMMARY"
           else
             echo "reachable=false" >> "$GITHUB_OUTPUT"
-            echo "warning - Não foi possível conectar ao SonarQube em ${TARGET_URL}. Etapa será ignorada." >> "$GITHUB_STEP_SUMMARY"
+            echo "warning - Não foi possível conectar ao SonarQube em ${SONAR_HOST_URL}. Etapa será ignorada." >> "$GITHUB_STEP_SUMMARY"
           fi
 
       - name: SonarQube
@@ -99,7 +94,7 @@ jobs:
           args: >
             -Dsonar.docker.args="--net=host"
         env:
-          SONAR_HOST_URL: ${{ steps.sonar-available.outputs.resolved_url }}
+          SONAR_HOST_URL: ${{ env.SONAR_HOST_URL }}
           SONAR_TOKEN: ${{ env.SONAR_TOKEN }}
 
       - name: Sonar skipped summary
@@ -108,7 +103,7 @@ jobs:
 
       - name: Sonar unreachable summary
         if: steps.sonar-creds.outputs.missing == 'false' && steps.sonar-available.outputs.reachable == 'false'
-        run: echo "SonarQube scan skipped - não foi possível alcançar o servidor." >> "$GITHUB_STEP_SUMMARY"
+        run: echo "SonarQube scan skipped - não foi possível alcançar o servidor ${SONAR_HOST_URL}." >> "$GITHUB_STEP_SUMMARY"
 
   trivy:
     name: Trivy Filesystem
@@ -218,80 +213,4 @@ jobs:
         if: github.event_name == 'push'
         uses: aquasecurity/trivy-action@v0.36.0
         with:
-          image-ref: ${{ steps.images.outputs.api_image }}
-          severity: CRITICAL,HIGH
-
-      - name: Trivy image scan (worker)
-        if: github.event_name == 'push'
-        uses: aquasecurity/trivy-action@v0.36.0
-        with:
-          image-ref: ${{ steps.images.outputs.worker_image }}
-          severity: CRITICAL,HIGH
-
-  pr-comment:
-    name: PR Comment Results
-    if: github.event_name == 'pull_request'
-    runs-on: self-hosted
-    needs:
-      - lint
-      - sonarqube
-      - trivy
-      - unit-tests
-    steps:
-      - uses: actions/github-script@v7
-        with:
-          script: |
-            const { data: comments } = await github.rest.issues.listComments({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-            });
-            const botComment = comments.find(c =>
-              c.user.type === 'Bot' &&
-              c.body.includes('CI Results'));
-
-            const body = `## CI Results
-
-            | Check | Status |
-            |---|---|
-            | Lint (ShellCheck + Hadolint) | ✅ |
-            | SonarQube Scan | ✅ |
-            | Trivy Filesystem | ✅ |
-            | Unit Tests | ✅ |
-
-            _Commit: \`${{ github.sha }}\`_
-            _Triggered by: PR #${{ github.event.number }}_
-            _This is an automated comment._`;
-
-            if (botComment) {
-              await github.rest.issues.updateComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                comment_id: botComment.id,
-                body
-              });
-            } else {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: context.issue.number,
-                body
-              });
-            }
-
-  gitops-trigger:
-    name: ArgoCD Sync
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    needs:
-      - docker-build
-    steps:
-      - name: Trigger ArgoCD webhook
-        env:
-          ARGOCD_WEBHOOK_URL: ${{ secrets.ARGOCD_WEBHOOK_URL }}
-          API_IMAGE: ${{ needs.docker-build.outputs.api_image }}
-          WORKER_IMAGE: ${{ needs.docker-build.outputs.worker_image }}
-        run: |
-          curl -X POST "$ARGOCD_WEBHOOK_URL" \
-            -H 'Content-Type: application/json' \
-            -d "{\"ref\":\"$GITHUB_REF\",\"commit\":\"$GITHUB_SHA\",\"images\":{\"api\":\"$API_IMAGE\",\"worker\":\"$WORKER_IMAGE\"}}"
+          image-ref: ${{ steps.images
