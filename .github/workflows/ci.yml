@@ -26,7 +26,7 @@ jobs:
         uses: ludeeus/action-shellcheck@master
         with:
           severity: warning
-          ignore_paths: scripts/configure-jenkins.sh # Ignora o script com aviso SC2034
+          ignore_paths: scripts/configure-jenkins.sh
         continue-on-error: true
 
       - name: Hadolint (API)
@@ -64,19 +64,22 @@ jobs:
         run: |
           CLEAN_TOKEN=$(echo "${SONAR_TOKEN}" | xargs)
           
-          # Testa a conectividade local no host (127.0.0.1)
+          # 1. Valida se o Sonar está respondendo localmente no host (WSL2)
           if curl -sf --connect-timeout 5 -u "${CLEAN_TOKEN}:" "${SONAR_HOST_URL}/api/system/status" >/tmp/sonar-status.json; then
             echo "reachable=true" >> "$GITHUB_OUTPUT"
             
-            # MÁGICA PARA WSL2: Se a URL for localhost/127.0.0.1, extrai o IP real da interface de rede da WSL
+            # 2. ABORDAGEM SRE: Se for localhost/127.0.0.1, descobrimos o IP do Gateway da Bridge do Docker
             if [[ "${SONAR_HOST_URL}" == *"127.0.0.1"* ]] || [[ "${SONAR_HOST_URL}" == *"localhost"* ]]; then
-              WSL_IP=$(ip -4 addr show eth0 | grep -oP '(?<=inet \s)\d+(\.\d+){3}' | head -n1)
-              if [ -z "$WSL_IP" ]; then
-                # Fallback caso a interface não seja eth0 (comum em algumas distros customizadas)
-                WSL_IP=$(hostname -I | awk '{print $1}')
+              # Captura o IP do host na rede docker0 (Gateway padrão do Docker)
+              DOCKER_GATEWAY=$(ip -4 addr show docker0 | grep -oP '(?<=inet \s)\d+(\.\d+){3}' | head -n1)
+              
+              if [ -z "$DOCKER_GATEWAY" ]; then
+                # Fallback caso use uma rede customizada: pega o gateway padrão do sistema de roteamento
+                DOCKER_GATEWAY=$(ip route | grep default | awk '{print $3}' | head -n1)
               fi
-              echo "RESOLVED_URL=http://${WSL_IP}:9000" >> "$GITHUB_OUTPUT"
-              echo "Debug: Redirecionando container do Sonar para o IP da WSL2: http://${WSL_IP}:9000"
+              
+              echo "RESOLVED_URL=http://${DOCKER_GATEWAY}:9000" >> "$GITHUB_OUTPUT"
+              echo "SRE-Log: Redirecionando Action para o Gateway do Docker (Host WSL2): http://${DOCKER_GATEWAY}:9000"
             else
               echo "RESOLVED_URL=${SONAR_HOST_URL}" >> "$GITHUB_OUTPUT"
             fi
