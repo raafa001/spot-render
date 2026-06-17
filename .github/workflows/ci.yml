@@ -125,6 +125,7 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+          check-latest: true # Força a busca da revisão estável mais recente compatível se falhar no cache local
 
       - name: Install dependencies
         run: |
@@ -234,4 +235,54 @@ jobs:
             const { data: comments } = await github.rest.issues.listComments({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              issue_number: context.
+              issue_number: context.issue.number,
+            });
+            const botComment = comments.find(c =>
+              c.user.type === 'Bot' &&
+              c.body.includes('CI Results'));
+
+            const body = `## CI Results
+
+            | Check | Status |
+            |---|---|
+            | Lint (ShellCheck + Hadolint) | ✅ |
+            | SonarQube Scan | ✅ |
+            | Trivy Filesystem | ✅ |
+            | Unit Tests | ✅ |
+
+            _Commit: \`${{ github.sha }}\`_
+            _Triggered by: PR #${{ github.event.number }}_
+            _This is an automated comment._`;
+
+            if (botComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body
+              });
+            }
+
+  gitops-trigger:
+    name: ArgoCD Sync
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    needs:
+      - docker-build
+    steps:
+      - name: Trigger ArgoCD webhook
+        env:
+          ARGOCD_WEBHOOK_URL: ${{ secrets.ARGOCD_WEBHOOK_URL }}
+          API_IMAGE: ${{ needs.docker-build.outputs.api_image }}
+          WORKER_IMAGE: ${{ needs.docker-build.outputs.worker_image }}
+        run: |
+          curl -X POST "$ARGOCD_WEBHOOK_URL" \
+            -H 'Content-Type: application/json' \
+            -d "{\"ref\":\"$GITHUB_REF\",\"commit\":\"$GITHUB_SHA\",\"images\":{\"api\":\"$API_IMAGE\",\"worker\":\"$WORKER_IMAGE\"}}"
