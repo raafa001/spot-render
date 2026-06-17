@@ -53,7 +53,6 @@ jobs:
         run: |
           if [ -z "${SONAR_HOST_URL}" ] || [ -z "${SONAR_TOKEN}" ]; then
             echo "missing=true" >> "$GITHUB_OUTPUT"
-            echo "::warning::SONAR_HOST_URL/SONAR_TOKEN não configurados. SonarQube será ignorado."
           else
             echo "missing=false" >> "$GITHUB_OUTPUT"
           fi
@@ -63,50 +62,19 @@ jobs:
         id: sonar-available
         run: |
           CLEAN_TOKEN=$(echo "${SONAR_TOKEN}" | xargs)
-          
-          # 1. Valida se o Sonar está respondendo localmente no host (WSL2)
-          if curl -sf --connect-timeout 5 -u "${CLEAN_TOKEN}:" "${SONAR_HOST_URL}/api/system/status" >/tmp/sonar-status.json; then
+          if curl -sf --connect-timeout 5 -u "${CLEAN_TOKEN}:" "${SONAR_HOST_URL}/api/system/status" >/dev/null; then
             echo "reachable=true" >> "$GITHUB_OUTPUT"
-            
-            # 2. ABORDAGEM SRE: Se for localhost/127.0.0.1, descobrimos o IP do Gateway da Bridge do Docker
-            if [[ "${SONAR_HOST_URL}" == *"127.0.0.1"* ]] || [[ "${SONAR_HOST_URL}" == *"localhost"* ]]; then
-              # Captura o IP do host na rede docker0 (Gateway padrão do Docker)
-              DOCKER_GATEWAY=$(ip -4 addr show docker0 | grep -oP '(?<=inet \s)\d+(\.\d+){3}' | head -n1)
-              
-              if [ -z "$DOCKER_GATEWAY" ]; then
-                # Fallback caso use uma rede customizada: pega o gateway padrão do sistema de roteamento
-                DOCKER_GATEWAY=$(ip route | grep default | awk '{print $3}' | head -n1)
-              fi
-              
-              echo "RESOLVED_URL=http://${DOCKER_GATEWAY}:9000" >> "$GITHUB_OUTPUT"
-              echo "SRE-Log: Redirecionando Action para o Gateway do Docker (Host WSL2): http://${DOCKER_GATEWAY}:9000"
-            else
-              echo "RESOLVED_URL=${SONAR_HOST_URL}" >> "$GITHUB_OUTPUT"
-            fi
-            
-            STATUS=$(python3 << 'EOF'
-          import json
-          from pathlib import Path
-          status = "unknown"
-          try:
-              data = json.loads(Path('/tmp/sonar-status.json').read_text())
-              status = data.get('status', 'unknown')
-          except Exception:
-              pass
-          print(status)
-          EOF
-            )
-            echo "SonarQube status: ${STATUS}" >> "$GITHUB_STEP_SUMMARY"
           else
             echo "reachable=false" >> "$GITHUB_OUTPUT"
-            echo "warning - Não foi possível conectar ao SonarQube em ${SONAR_HOST_URL}. Etapa será ignorada." >> "$GITHUB_STEP_SUMMARY"
           fi
 
       - name: SonarQube
         if: steps.sonar-creds.outputs.missing == 'false' && steps.sonar-available.outputs.reachable == 'true'
         uses: sonarsource/sonarqube-scan-action@v2
+        with:
+          options: --net=host
         env:
-          SONAR_HOST_URL: ${{ steps.sonar-available.outputs.RESOLVED_URL }}
+          SONAR_HOST_URL: ${{ env.SONAR_HOST_URL }}
           SONAR_TOKEN: ${{ env.SONAR_TOKEN }}
 
       - name: Sonar skipped summary
@@ -115,7 +83,7 @@ jobs:
 
       - name: Sonar unreachable summary
         if: steps.sonar-creds.outputs.missing == 'false' && steps.sonar-available.outputs.reachable == 'false'
-        run: echo "SonarQube scan skipped - não foi possível alcançar o servidor ${SONAR_HOST_URL}." >> "$GITHUB_STEP_SUMMARY"
+        run: echo "SonarQube scan skipped - não foi possível alcançar ${SONAR_HOST_URL}." >> "$GITHUB_STEP_SUMMARY"
 
   trivy:
     name: Trivy Filesystem
