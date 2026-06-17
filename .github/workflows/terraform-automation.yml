@@ -68,7 +68,7 @@ jobs:
       github.event.issue.pull_request != '' &&
       (startsWith(github.event.comment.body, '/terraform apply') ||
        startsWith(github.event.comment.body, '/terraform destroy'))
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - name: Show apply/destroy instructions
         uses: actions/github-script@v7
