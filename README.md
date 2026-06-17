@@ -46,7 +46,7 @@ Artefatos legados (Groovy pipelines, scripts Jenkins, `terraform/` antigo) perma
 - AWS CLI configurado (quando `enable_aws=true`)
 - Cluster local (Kind, Minikube ou Docker Desktop) com StorageClass `local-path`
 - Secrets obrigatórios no repositório (GitHub → Settings → Secrets): `SONAR_HOST_URL`, `SONAR_TOKEN`, `AWS_DEPLOY_ROLE_ARN`, `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN`, `ARGOCD_WEBHOOK_URL`. Caso `SONAR_*` não estejam definidos o job exibirá apenas um aviso e seguirá.
-> ℹ️ **Dica:** se estiver rodando o SonarQube localmente (ex.: WSL2), use o endereço completo acessível a partir do runner self-hosted, como `http://127.0.0.1:9000` ou o IP da interface desejada, antes de salvar `SONAR_HOST_URL` nos secrets.
+> ℹ️ **Dica:** se estiver rodando o SonarQube localmente (ex.: WSL2), use o endereço completo acessível a partir do runner self-hosted (por exemplo `http://127.0.0.1:9000` ou o IP da interface), antes de salvar `SONAR_HOST_URL` nos secrets.
 
 ### Quickstart Local (Kind/Minikube)
 
