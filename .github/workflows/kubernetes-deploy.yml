@@ -3,17 +3,17 @@ name: Kubernetes Deploy
 on:
   workflow_dispatch:
     inputs:
-      environment:
-        description: Target environment
+      overlay:
+        description: Target Kustomize overlay
         required: true
         type: choice
         options:
-          - dev
-          - production
+          - local
+          - prd
       namespace:
-        description: Kubernetes namespace
-        required: true
-        default: monitoring
+        description: Kubernetes namespace override (opcional)
+        required: false
+        default: ""
       dry-run:
         description: Dry run (validate only)
         required: true
@@ -34,28 +34,21 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Check K8s manifests exist
+      - uses: imranismail/setup-kustomize@v2
+        with:
+          kustomize-version: v5.5.0
+
+      - name: Validate Kustomize overlays
         run: |
-          expected=(
-            "kubernetes/namespaces.yaml"
-            "kubernetes/grafana-deployment.yaml"
-            "kubernetes/grafana-service.yaml"
-            "kubernetes/prometheus-deployment.yaml"
-            "kubernetes/prometheus-service.yaml"
-            "kubernetes/prometheus-configmap.yaml"
-            "kubernetes/prometheus-rules.yaml"
-            "kubernetes/prometheus-datasource.yaml"
-            "kubernetes/prometheus-dashboard-provider.yaml"
-            "kubernetes/prometheus-dashboards.yaml"
-            "kubernetes/network-policy.yaml"
-          )
-          for f in "${expected[@]}"; do
-            if [ ! -f "$f" ]; then
-              echo "::error::Missing manifest: $f"
+          for dir in k8s/base k8s/overlays/${{ inputs.overlay }}; do
+            if [ ! -f "$dir/kustomization.yaml" ]; then
+              echo "::error::Missing kustomization in $dir"
               exit 1
             fi
           done
-          echo "All manifests present."
+          kustomize build k8s/overlays/${{ inputs.overlay }} >/tmp/rendering.yaml
+          kubectl apply --dry-run=client -f /tmp/rendering.yaml >/dev/null
+          echo "Overlay ${{ inputs.overlay }} validated via kubectl apply --dry-run"
 
   deploy:
     name: Deploy
@@ -64,6 +57,10 @@ jobs:
     if: ${{ !inputs.dry-run }}
     steps:
       - uses: actions/checkout@v6
+
+      - uses: imranismail/setup-kustomize@v2
+        with:
+          kustomize-version: v5.5.0
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -74,26 +71,17 @@ jobs:
       - name: Update kubeconfig
         run: aws eks update-kubeconfig --name ${{ secrets.EKS_CLUSTER_NAME }} --region ${{ env.AWS_REGION }}
 
-      - name: Create namespace if not exists
+      - name: Create namespace override (optional)
+        if: ${{ inputs.namespace != '' }}
         run: kubectl create namespace ${{ inputs.namespace }} --dry-run=client -o yaml | kubectl apply -f -
 
-      - name: Apply manifests
+      - name: Apply overlay
+        env:
+          TARGET_NAMESPACE: ${{ inputs.namespace != '' && inputs.namespace || 'rendering' }}
         run: |
-          manifests=(
-            "kubernetes/grafana-deployment.yaml"
-            "kubernetes/grafana-service.yaml"
-            "kubernetes/prometheus-deployment.yaml"
-            "kubernetes/prometheus-service.yaml"
-            "kubernetes/prometheus-configmap.yaml"
-            "kubernetes/prometheus-rules.yaml"
-            "kubernetes/prometheus-datasource.yaml"
-            "kubernetes/prometheus-dashboard-provider.yaml"
-            "kubernetes/prometheus-dashboards.yaml"
-            "kubernetes/network-policy.yaml"
-          )
-          for manifest in "${manifests[@]}"; do
-            kubectl apply -f "$manifest" -n ${{ inputs.namespace }}
-          done
+          kustomize build k8s/overlays/${{ inputs.overlay }} | kubectl apply -f -
+          kubectl get pods -n "$TARGET_NAMESPACE"
+          kubectl get svc -n "$TARGET_NAMESPACE"
 
       - name: Verify deployment
         run: |
@@ -108,16 +96,14 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Validate YAML syntax
-        run: |
-          for f in kubernetes/*.yaml; do
-            python3 -c "import yaml; yaml.safe_load(open('$f')); print('✅ $f: valid YAML')" || exit 1
-          done
+      - uses: imranismail/setup-kustomize@v2
+        with:
+          kustomize-version: v5.5.0
 
-      - name: Show manifests summary
+      - name: Dry-run render
         run: |
+          kustomize build k8s/overlays/${{ inputs.overlay }} >/tmp/rendering.yaml
+          kubectl apply --dry-run=client -f /tmp/rendering.yaml >/dev/null
           echo "## Dry Run Summary" >> $GITHUB_STEP_SUMMARY
-          for f in kubernetes/*.yaml; do
-            resources=$(grep -c "^kind:" "$f" || true)
-            echo "- $f ($resources resources)" >> $GITHUB_STEP_SUMMARY
-          done
+          resources=$(grep -c '^kind:' /tmp/rendering.yaml || true)
+          echo "Overlay ${{ inputs.overlay }} renderizou ${resources} recursos" >> $GITHUB_STEP_SUMMARY

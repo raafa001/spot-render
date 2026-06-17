@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: render-assets
+  namespace: rendering
+  annotations:
+    spot-render.io/storage: "Texturas e arquivos .blend compartilhados"
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 200Gi
+  storageClassName: render-assets-sc

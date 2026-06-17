@@ -1,0 +1,31 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: render-api
+  namespace: rendering
+  annotations:
+    kubernetes.io/ingress.class: alb
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/load-balancer-name: spot-render-api
+    alb.ingress.kubernetes.io/waf-acl-id: waf-spot-render
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
+    alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:us-east-1:123456789012:certificate/abcdef
+    alb.ingress.kubernetes.io/group.name: spot-render
+spec:
+  ingressClassName: alb
+  tls:
+    - hosts:
+        - render.spot-render.example.com
+      secretName: render-api-tls
+  rules:
+    - host: render.spot-render.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: render-api
+                port:
+                  number: 8080

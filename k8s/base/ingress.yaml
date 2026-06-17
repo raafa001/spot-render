@@ -1,0 +1,44 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: render-api
+  namespace: rendering
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    cert-manager.io/cluster-issuer: letsencrypt-http
+    nginx.ingress.kubernetes.io/proxy-body-size: 25m
+    nginx.ingress.kubernetes.io/limit-rps: "50"
+    nginx.ingress.kubernetes.io/limit-connections: "20"
+    nginx.ingress.kubernetes.io/limit-burst-multiplier: "3"
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      set $block_abusive 0;
+      if ($http_user_agent ~* "sqlmap|nikto|dirbuster") {
+        set $block_abusive 1;
+      }
+      if ($block_abusive = 1) {
+        return 403;
+      }
+    nginx.ingress.kubernetes.io/enable-modsecurity: "true"
+    nginx.ingress.kubernetes.io/enable-owasp-modsecurity-crs: "true"
+    nginx.ingress.kubernetes.io/modsecurity-snippet: |
+      SecRuleEngine On
+      SecDefaultAction "phase:1,log,deny,status:403"
+      SecAction "id:900000,phase:1,nolog,pass,ctl:ruleEngine=DetectionOnly"
+    alb.ingress.kubernetes.io/waf-acl-id: "waf-acl-id-placeholder"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - render.local
+      secretName: render-api-tls
+  rules:
+    - host: render.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: render-api
+                port:
+                  number: 8080

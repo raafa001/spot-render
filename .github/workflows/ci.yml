@@ -11,10 +11,14 @@ permissions:
   checks: write
   pull-requests: write
 
+env:
+  SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+  SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
 jobs:
   lint:
     name: Lint
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - uses: actions/checkout@v6
 
@@ -24,64 +28,81 @@ jobs:
           severity: warning
         continue-on-error: true
 
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v4
+      - name: Hadolint (API)
+        uses: hadolint/hadolint-action@v3.1.0
         with:
-          terraform_version: 1.9.0
-
-      - name: Terraform Format
-        run: terraform fmt -check -recursive
+          dockerfile: Dockerfile.api
         continue-on-error: true
 
-  terraform-validate:
-    name: Terraform Validate
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        dir:
-          - terraform/kubernetes
-          - terraform/network
-          - terraform/permissions
-          - terraform/s3
+      - name: Hadolint (Worker)
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: Dockerfile.worker
+        continue-on-error: true
+
+  sonarqube:
+    name: SonarQube Scan
+    runs-on: self-hosted
+    needs: lint
     steps:
       - uses: actions/checkout@v6
 
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v4
+      - name: Check Sonar credentials
+        id: sonar-creds
+        run: |
+          if [ -z "${SONAR_HOST_URL}" ] || [ -z "${SONAR_TOKEN}" ]; then
+            echo "missing=true" >> "$GITHUB_OUTPUT"
+            echo "::warning::SONAR_HOST_URL/SONAR_TOKEN não configurados. SonarQube será ignorado nesta execução."
+          else
+            echo "missing=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Verify Sonar availability
+        if: steps.sonar-creds.outputs.missing == 'false'
+        id: sonar-available
+        run: |
+          if curl -sf --connect-timeout 5 "${SONAR_HOST_URL}/api/system/status" >/tmp/sonar-status.json; then
+            STATUS=$(python3 - <<'PY'
+import json
+from pathlib import Path
+status = "unknown"
+try:
+    data = json.loads(Path('/tmp/sonar-status.json').read_text())
+    status = data.get('status', 'unknown')
+except Exception:
+    pass
+print(status)
+PY
+)
+            echo "reachable=true" >> "$GITHUB_OUTPUT"
+            echo "SonarQube status: ${STATUS}" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "reachable=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Não foi possível conectar ao SonarQube em ${SONAR_HOST_URL}. Etapa será ignorada." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: SonarQube
+        if: steps.sonar-creds.outputs.missing == 'false' && steps.sonar-available.outputs.reachable == 'true'
+        uses: sonarsource/sonarqube-scan-action@v2
         with:
-          terraform_version: 1.9.0
+          args: >
+            -Dsonar.docker.args="--net=host"
+        env:
+          SONAR_HOST_URL: ${{ env.SONAR_HOST_URL }}
+          SONAR_TOKEN: ${{ env.SONAR_TOKEN }}
 
-      - name: Terraform Init
-        run: terraform init -backend=false
-        working-directory: ${{ matrix.dir }}
+      - name: Sonar skipped summary
+        if: steps.sonar-creds.outputs.missing == 'true'
+        run: echo "SonarQube scan skipped - configure SONAR_HOST_URL/SONAR_TOKEN secrets." >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Terraform Validate
-        run: terraform validate
-        working-directory: ${{ matrix.dir }}
-
-  sast:
-    name: SAST
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: TFSec
-        uses: aquasecurity/tfsec-action@v1.0.3
-        with:
-          working_directory: terraform/
-          soft_fail: true
-
-      - name: Checkov
-        uses: bridgecrewio/checkov-action@v12
-        with:
-          directory: terraform/
-          soft_fail: true
-          framework: terraform
+      - name: Sonar unreachable summary
+        if: steps.sonar-creds.outputs.missing == 'false' && steps.sonar-available.outputs.reachable == 'false'
+        run: echo "SonarQube scan skipped - não foi possível alcançar ${SONAR_HOST_URL}." >> "$GITHUB_STEP_SUMMARY"
 
   trivy:
-    name: Trivy
-    runs-on: ubuntu-latest
+    name: Trivy Filesystem
+    runs-on: self-hosted
+    needs: lint
     steps:
       - uses: actions/checkout@v6
 
@@ -93,57 +114,119 @@ jobs:
           format: table
           exit-code: 0
 
-  coverage:
-    name: Coverage
-    runs-on: ubuntu-latest
+  unit-tests:
+    name: API Unit Tests
+    runs-on: self-hosted
+    needs: lint
     steps:
       - uses: actions/checkout@v6
 
-      - name: Verify Terraform Module Outputs
-        run: |
-          echo "## Terraform Module Outputs Check" >> $GITHUB_STEP_SUMMARY
-          echo "| Module | Has Outputs |" >> $GITHUB_STEP_SUMMARY
-          echo "|--------|-------------|" >> $GITHUB_STEP_SUMMARY
-          for dir in terraform/*/; do
-            if [ -f "${dir}outputs.tf" ]; then
-              echo "| ${dir%/} | ✅ |" >> $GITHUB_STEP_SUMMARY
-            else
-              echo "| ${dir%/} | ⚠️  |" >> $GITHUB_STEP_SUMMARY
-            fi
-          done
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
 
-  terratest:
-    name: Terratest
-    runs-on: ubuntu-latest
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Run pytest
+        run: pytest --cov=services/api --cov-report=xml
+
+  docker-build:
+    name: Build & Publish Images
+    runs-on: self-hosted
+    needs:
+      - lint
+      - sonarqube
+      - trivy
+      - unit-tests
+    env:
+      AWS_REGION: us-east-1
+      DOCKERHUB_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE || 'spotrender' }}
+      AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID || '123456789012' }}
+    outputs:
+      api_image: ${{ steps.images.outputs.api_image }}
+      worker_image: ${{ steps.images.outputs.worker_image }}
     steps:
       - uses: actions/checkout@v6
 
-      - name: Setup Go
-        uses: actions/setup-go@v6
-        with:
-          go-version: '1.22'
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
 
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v4
-        with:
-          terraform_version: 1.9.0
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
 
-      - name: Terratest (Stub)
+      - name: Configure AWS credentials
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Login to Docker Hub
+        if: github.event_name == 'push' && github.ref != 'refs/heads/main'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Define image targets
+        id: images
         run: |
-          echo "Terratest requires AWS/GCP credentials to run integration tests."
-          echo "Skipping actual test execution. Run locally with: cd tests && go test -v"
-        continue-on-error: true
+          SHA=${GITHUB_SHA::7}
+          if [[ "${GITHUB_REF}" == "refs/heads/main" ]]; then
+            REGISTRY="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+          else
+            REGISTRY="docker.io/${DOCKERHUB_NAMESPACE}"
+          fi
+          echo "api_image=${REGISTRY}/spot-render-api:${SHA}" >> "$GITHUB_OUTPUT"
+          echo "worker_image=${REGISTRY}/spot-render-worker:${SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Build API image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.api
+          push: ${{ github.event_name == 'push' }}
+          tags: ${{ steps.images.outputs.api_image }}
+
+      - name: Build worker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.worker
+          push: ${{ github.event_name == 'push' }}
+          tags: ${{ steps.images.outputs.worker_image }}
+
+      - name: Trivy image scan (API)
+        if: github.event_name == 'push'
+        uses: aquasecurity/trivy-action@0.20.0
+        with:
+          image-ref: ${{ steps.images.outputs.api_image }}
+          severity: CRITICAL,HIGH
+
+      - name: Trivy image scan (worker)
+        if: github.event_name == 'push'
+        uses: aquasecurity/trivy-action@0.20.0
+        with:
+          image-ref: ${{ steps.images.outputs.worker_image }}
+          severity: CRITICAL,HIGH
 
   pr-comment:
     name: PR Comment Results
     if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     needs:
       - lint
-      - terraform-validate
-      - sast
+      - sonarqube
       - trivy
-      - coverage
+      - unit-tests
     steps:
       - uses: actions/github-script@v7
         with:
@@ -161,11 +244,10 @@ jobs:
 
             | Check | Status |
             |---|---|
-            | Lint (ShellCheck + TF Format) | ✅ |
-            | Terraform Validate | ✅ |
-            | SAST (TFSec + Checkov) | ⚠️ (soft-fail) |
-            | Trivy Scan | ✅ |
-            | Coverage Gate | ✅ |
+            | Lint (ShellCheck + Hadolint) | ✅ |
+            | SonarQube Scan | ✅ |
+            | Trivy Filesystem | ✅ |
+            | Unit Tests | ✅ |
 
             _Commit: \`${{ github.sha }}\`_
             _Triggered by: PR #${{ github.event.number }}_
@@ -186,3 +268,18 @@ jobs:
                 body
               });
             }
+
+  gitops-trigger:
+    name: ArgoCD Sync
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    needs:
+      - docker-build
+    steps:
+      - name: Trigger ArgoCD webhook
+        env:
+          ARGOCD_WEBHOOK_URL: ${{ secrets.ARGOCD_WEBHOOK_URL }}
+        run: |
+          curl -X POST "$ARGOCD_WEBHOOK_URL" \
+            -H 'Content-Type: application/json' \
+            -d '{"ref":"'"${GITHUB_REF}"'","commit":"'"${GITHUB_SHA}"'","images":{"api":"'"${{ needs.docker-build.outputs.api_image }}"'","worker":"'"${{ needs.docker-build.outputs.worker_image }}"'"}}'

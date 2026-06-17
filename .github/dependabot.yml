@@ -1,6 +1,14 @@
 version: 2
 updates:
   - package-ecosystem: "terraform"
+    directory: "/infra/terraform"
+    schedule:
+      interval: "weekly"
+  - package-ecosystem: "terraform"
+    directory: "/terraform"
+    schedule:
+      interval: "weekly"
+  - package-ecosystem: "pip"
     directory: "/"
     schedule:
       interval: "weekly"

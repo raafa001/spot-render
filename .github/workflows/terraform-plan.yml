@@ -1,0 +1,63 @@
+name: Terraform Plan
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - infra/terraform/**
+      - .github/workflows/terraform-plan.yml
+  workflow_dispatch:
+  schedule:
+    - cron: '0 0,8,16 * * *'
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  AWS_REGION: us-east-1
+
+jobs:
+  plan:
+    name: Terraform Plan (infra/terraform)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Configure AWS credentials
+        if: github.event_name != 'pull_request'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: 1.9.0
+
+      - name: Terraform fmt (report only)
+        working-directory: infra/terraform
+        run: terraform fmt -check -recursive
+        continue-on-error: true
+
+      - name: Terraform init
+        working-directory: infra/terraform
+        run: terraform init
+
+      - name: Terraform plan
+        id: plan
+        working-directory: infra/terraform
+        run: terraform plan -out=tfplan
+
+      - name: Upload plan artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-plan
+          path: infra/terraform/tfplan
+
+      - name: Summarize plan
+        working-directory: infra/terraform
+        run: |
+          echo "## Terraform Plan (infra/terraform)" >> $GITHUB_STEP_SUMMARY
+          terraform show tfplan >> $GITHUB_STEP_SUMMARY

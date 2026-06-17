@@ -1,0 +1,21 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: blender-worker
+  namespace: rendering
+  labels:
+    release: prometheus-stack
+spec:
+  namespaceSelector:
+    matchNames:
+      - rendering
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: blender-worker
+  podMetricsEndpoints:
+    - port: metrics
+      interval: 30s
+      scrapeTimeout: 10s
+      relabelings:
+        - action: labelmap
+          regex: __meta_kubernetes_pod_label_(.+)

@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rendering-env
+  namespace: rendering
+data:
+  RENDER_STORAGE_PATH: "/mnt/assets"
+  RENDER_OUTPUT_BUCKET: "file:///mnt/shared/frames"
+  LOCAL_QUEUE_PATH: "/mnt/assets/queue"
+  LOCAL_OUTPUT_PATH: "/mnt/assets/output"

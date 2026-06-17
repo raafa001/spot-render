@@ -1,0 +1,4 @@
+-r services/api/requirements.txt
+pytest==8.2.1
+pytest-cov==5.0.0
+requests==2.32.2

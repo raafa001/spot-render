@@ -1,0 +1,22 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: render-api-http-errors
+  namespace: rendering
+spec:
+  args:
+    - name: service-name
+      value: render-api
+  metrics:
+    - name: http-5xx-rate
+      interval: 1m
+      failureCondition: result[0] > 0.01
+      successCondition: result[0] <= 0.01
+      consecutiveErrorLimit: 1
+      provider:
+        prometheus:
+          address: http://prometheus-operated.monitoring.svc.cluster.local:9090
+          query: |
+            sum(rate(http_requests_total{service="{{args.service-name}}",status=~"5.."}[5m]))
+            /
+            sum(rate(http_requests_total{service="{{args.service-name}}"}[5m]))

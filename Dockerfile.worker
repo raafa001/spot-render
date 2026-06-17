@@ -1,0 +1,46 @@
+# syntax=docker/dockerfile:1.7-labs
+
+# hadolint ignore=DL3006
+ARG CUDA_IMAGE=nvidia/cuda:12.3.1-runtime-ubuntu22.04
+ARG BLENDER_VERSION=4.1.1
+ARG BLENDER_BRANCH=Blender4.1
+
+# hadolint ignore=DL3006
+FROM ${CUDA_IMAGE} AS blender
+ARG BLENDER_VERSION
+ARG BLENDER_BRANCH
+
+ENV DEBIAN_FRONTEND=noninteractive
+# hadolint ignore=DL3008
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl ca-certificates xz-utils libglu1-mesa libxi6 libxrender1 libxkbcommon0 \
+    && curl -sSL "https://download.blender.org/release/${BLENDER_BRANCH}/blender-${BLENDER_VERSION}-linux-x64.tar.xz" -o /tmp/blender.tar.xz \
+    && tar -xf /tmp/blender.tar.xz -C /opt \
+    && mv /opt/blender-${BLENDER_VERSION}-linux-x64 /opt/blender \
+    && rm -rf /var/lib/apt/lists/* /tmp/*
+
+# hadolint ignore=DL3006
+FROM ${CUDA_IMAGE}
+
+ENV NVIDIA_VISIBLE_DEVICES=all \
+    NVIDIA_DRIVER_CAPABILITIES=compute,utility \
+    BLENDER_PATH=/opt/blender \
+    PATH=/opt/blender:$PATH
+
+# hadolint ignore=DL3008
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends python3 procps \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN groupadd -r render -g 1001 && useradd -r -g render -u 1001 render
+
+COPY --from=blender /opt/blender /opt/blender
+COPY workers/blender-runner/entrypoint.sh /usr/local/bin/entrypoint.sh
+
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
+VOLUME ["/mnt/assets"]
+
+USER render
+
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

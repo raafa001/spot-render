@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rendering-env
+  namespace: rendering
+  annotations:
+    spot-render.io/description: "Variáveis globais compartilhadas entre API e workers."
+data:
+  RENDER_STORAGE_PATH: "/mnt/assets"
+  RENDER_OUTPUT_BUCKET: "s3://spot-render/frames"
+  API_WORK_QUEUE: "redis://redis.rendering.svc.cluster.local:6379/0"
+  MAX_CONCURRENT_FRAMES: "4"
+  LOCAL_QUEUE_PATH: "/mnt/assets/queue"
+  LOCAL_OUTPUT_PATH: "/mnt/assets/output"
+  POLL_INTERVAL_SECONDS: "30"

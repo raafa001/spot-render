@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: render-api-canary
+  namespace: rendering
+  labels:
+    app.kubernetes.io/name: render-api
+    app.kubernetes.io/component: api
+    argo-rollouts.argoproj.io/role: canary
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: render-api
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http

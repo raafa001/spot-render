@@ -1,0 +1,25 @@
+# Ambiente local - base para desenvolvimento
+environment   = "local"
+enable_aws    = false
+aws_region    = "us-east-1"
+
+# Ajuste para perfil customizado
+aws_profile = "spot-render"
+
+# Definição do storage local
+local_storage_class_name     = "local-path"
+local_postgres_storage_size  = "50Gi"
+
+# Configurações do cluster (usadas quando enable_aws = true)
+eks_cluster_name    = "spot-render-eks"
+eks_cluster_version = "1.29"
+eks_gpu_instance_types = ["g5.2xlarge"]
+
+# Banco de dados
+database_name     = "renderqueue"
+database_username = "render_admin"
+database_password = "mude-me"
+
+# Backend remoto - atualize antes do primeiro terraform init no ambiente remoto
+tf_state_bucket      = "spot-render-terraform-state"
+tf_state_lock_table  = "spot-render-terraform-lock"
