@@ -121,13 +121,19 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Install dependencies
+    # Passo 1: Garantir que o venv seja criado e as dependências instaladas dentro dele
+      - name: Install dependencies within Virtual Environment
         run: |
+          python3 -m venv .venv
+          source .venv/bin/activate
           python3 -m pip install --upgrade pip
           pip install -r requirements-dev.txt
 
+      # Passo 2: Rodar o pytest usando o ambiente virtual criado
       - name: Run pytest
-        run: pytest --cov=services/api --cov-report=xml
+        run: |
+          source .venv/bin/activate
+          pytest --cov=services/api --cov-report=xml
 
   docker-build:
     name: Build & Publish Images
