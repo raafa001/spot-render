@@ -207,7 +207,7 @@ jobs:
 
       - name: Trivy image scan (API)
         if: github.event_name == 'push'
-        uses: aquasecurity/trivy-action@0.20.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ steps.images.outputs.api_image }}
           severity: CRITICAL,HIGH
