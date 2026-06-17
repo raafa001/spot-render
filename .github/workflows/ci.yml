@@ -65,12 +65,14 @@ jobs:
             STATUS=$(python3 - <<'PY'
 import json
 from pathlib import Path
+
 status = "unknown"
 try:
     data = json.loads(Path('/tmp/sonar-status.json').read_text())
     status = data.get('status', 'unknown')
 except Exception:
     pass
+
 print(status)
 PY
 )
