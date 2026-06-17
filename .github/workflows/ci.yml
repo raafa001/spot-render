@@ -62,18 +62,15 @@ jobs:
         id: sonar-available
         run: |
           if curl -sf --connect-timeout 5 "${SONAR_HOST_URL}/api/system/status" >/tmp/sonar-status.json; then
-            STATUS=$(
-              python3 <<'PY'
+            STATUS=$(python3 <<'PY'
 import json
 from pathlib import Path
-
 status = "unknown"
 try:
     data = json.loads(Path('/tmp/sonar-status.json').read_text())
     status = data.get('status', 'unknown')
 except Exception:
     pass
-
 print(status)
 PY
             )
@@ -81,7 +78,7 @@ PY
             echo "SonarQube status: ${STATUS}" >> "$GITHUB_STEP_SUMMARY"
           else
             echo "reachable=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::Não foi possível conectar ao SonarQube em ${SONAR_HOST_URL}. Etapa será ignorada." >> "$GITHUB_STEP_SUMMARY"
+            echo "warning - Não foi possível conectar ao SonarQube em ${SONAR_HOST_URL}. Etapa será ignorada." >> "$GITHUB_STEP_SUMMARY"
           fi
 
       - name: SonarQube
