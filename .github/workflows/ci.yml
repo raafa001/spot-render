@@ -50,9 +50,10 @@ jobs:
       - name: Check Sonar credentials
         id: sonar-creds
         run: |
+          # Aspas duplas ao redor das variáveis impedem o erro "binary operator expected"
           if [ -z "${SONAR_HOST_URL}" ] || [ -z "${SONAR_TOKEN}" ]; then
             echo "missing=true" >> "$GITHUB_OUTPUT"
-            echo "::warning::SONAR_HOST_URL/SONAR_TOKEN não configurados. SonarQube será ignorado nesta execução."
+            echo "::warning::SONAR_HOST_URL/SONAR_TOKEN não configurados. SonarQube será ignorado."
           else
             echo "missing=false" >> "$GITHUB_OUTPUT"
           fi
@@ -61,7 +62,16 @@ jobs:
         if: steps.sonar-creds.outputs.missing == 'false'
         id: sonar-available
         run: |
-          if curl -sf --connect-timeout 5 "${SONAR_HOST_URL}/api/system/status" >/tmp/sonar-status.json; then
+          # Resolve o problema de loopback do Docker na WSL2 limpando a URL se necessário
+          TARGET_URL="${SONAR_HOST_URL}"
+          if [[ "${TARGET_URL}" == *"localhost"* ]] || [[ "${TARGET_URL}" == *"127.0.0.1"* ]]; then
+            TARGET_URL="http://host.docker.internal:9000"
+            echo "Ajustando URL para comunicação interna de container Docker na WSL2: ${TARGET_URL}"
+          fi
+
+          # Executa o curl validando o token de forma segura contra espaços espúrios
+          CLEAN_TOKEN=$(echo "${SONAR_TOKEN}" | xargs)
+          if curl -sf --connect-timeout 5 -u "${CLEAN_TOKEN}:" "${TARGET_URL}/api/system/status" >/tmp/sonar-status.json; then
             STATUS=$(python3 << 'EOF'
           import json
           from pathlib import Path
@@ -75,10 +85,11 @@ jobs:
           EOF
             )
             echo "reachable=true" >> "$GITHUB_OUTPUT"
+            echo "resolved_url=${TARGET_URL}" >> "$GITHUB_OUTPUT"
             echo "SonarQube status: ${STATUS}" >> "$GITHUB_STEP_SUMMARY"
           else
             echo "reachable=false" >> "$GITHUB_OUTPUT"
-            echo "warning - Não foi possível conectar ao SonarQube em ${SONAR_HOST_URL}. Etapa será ignorada." >> "$GITHUB_STEP_SUMMARY"
+            echo "warning - Não foi possível conectar ao SonarQube em ${TARGET_URL}. Etapa será ignorada." >> "$GITHUB_STEP_SUMMARY"
           fi
 
       - name: SonarQube
@@ -88,7 +99,7 @@ jobs:
           args: >
             -Dsonar.docker.args="--net=host"
         env:
-          SONAR_HOST_URL: ${{ env.SONAR_HOST_URL }}
+          SONAR_HOST_URL: ${{ steps.sonar-available.outputs.resolved_url }}
           SONAR_TOKEN: ${{ env.SONAR_TOKEN }}
 
       - name: Sonar skipped summary
@@ -97,7 +108,7 @@ jobs:
 
       - name: Sonar unreachable summary
         if: steps.sonar-creds.outputs.missing == 'false' && steps.sonar-available.outputs.reachable == 'false'
-        run: echo "SonarQube scan skipped - não foi possível alcançar ${SONAR_HOST_URL}." >> "$GITHUB_STEP_SUMMARY"
+        run: echo "SonarQube scan skipped - não foi possível alcançar o servidor." >> "$GITHUB_STEP_SUMMARY"
 
   trivy:
     name: Trivy Filesystem
@@ -121,7 +132,6 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-    # Passo 1: Garantir que o venv seja criado e as dependências instaladas dentro dele
       - name: Install dependencies within Virtual Environment
         run: |
           python3 -m venv .venv
@@ -129,7 +139,6 @@ jobs:
           python3 -m pip install --upgrade pip
           pip install -r requirements-dev.txt
 
-      # Passo 2: Rodar o pytest usando o ambiente virtual criado
       - name: Run pytest
         run: |
           source .venv/bin/activate
