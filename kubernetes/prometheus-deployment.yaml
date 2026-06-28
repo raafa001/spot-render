@@ -22,7 +22,7 @@ spec:
         - name: prometheus
           image: prom/prometheus:v2.45.0  # Evite usar :latest (use versão específica)
           command:
-            - "/prometheus"
+            - "/bin/prometheus"
             - "--config.file=/etc/prometheus/prometheus.yml"
             - "--storage.tsdb.path=/prometheus"
           ports:
