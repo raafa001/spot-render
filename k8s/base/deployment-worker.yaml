@@ -1,0 +1,114 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: blender-worker
+  namespace: rendering
+  labels:
+    app.kubernetes.io/name: blender-worker
+    app.kubernetes.io/component: worker
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: blender-worker
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: blender-worker
+        workload: render
+    spec:
+      serviceAccountName: blender-worker
+      priorityClassName: high-priority
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: spot-render.io/gpu-capable
+                    operator: In
+                    values: ["true"]
+      tolerations:
+        - key: "nvidia.com/gpu"
+          operator: Exists
+          effect: NoSchedule
+      containers:
+        - name: blender
+          image: ghcr.io/company/spot-render-worker:latest
+          imagePullPolicy: IfNotPresent
+          command:
+            - "/entrypoint.sh"
+          envFrom:
+            - configMapRef:
+                name: rendering-env
+          env:
+            - name: RENDER_QUEUE_HOST
+              value: render-api.rendering.svc.cluster.local
+            - name: MAX_CONCURRENT_FRAMES
+              valueFrom:
+                configMapKeyRef:
+                  name: rendering-env
+                  key: MAX_CONCURRENT_FRAMES
+            - name: QUEUE_PATH
+              valueFrom:
+                configMapKeyRef:
+                  name: rendering-env
+                  key: LOCAL_QUEUE_PATH
+            - name: OUTPUT_PATH
+              valueFrom:
+                configMapKeyRef:
+                  name: rendering-env
+                  key: LOCAL_OUTPUT_PATH
+            - name: POLL_INTERVAL_SECONDS
+              valueFrom:
+                configMapKeyRef:
+                  name: rendering-env
+                  key: POLL_INTERVAL_SECONDS
+          ports:
+            - name: metrics
+              containerPort: 9100
+          startupProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - test -x /opt/blender/blender
+            failureThreshold: 10
+            periodSeconds: 10
+          readinessProbe:
+            tcpSocket:
+              port: metrics
+            periodSeconds: 10
+            initialDelaySeconds: 20
+          livenessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - test -f /tmp/worker.ready
+            periodSeconds: 30
+          volumeMounts:
+            - name: blender-assets
+              mountPath: /mnt/assets
+            - name: shared-tmp
+              mountPath: /tmp
+          resources:
+            limits:
+              cpu: "2000m"
+              memory: "8Gi"
+              nvidia.com/gpu: 1
+            requests:
+              cpu: "1000m"
+              memory: "4Gi"
+              nvidia.com/gpu: 1
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 1001
+      volumes:
+        - name: blender-assets
+          persistentVolumeClaim:
+            claimName: render-assets
+        - name: shared-tmp
+          emptyDir:
+            medium: Memory

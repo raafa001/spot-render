@@ -10,7 +10,7 @@ jobs:
     name: Detect Terraform Drift
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v4
@@ -19,22 +19,29 @@ jobs:
 
       - name: Terraform Init
         run: terraform init -input=false
-        working-directory: terraform
+        working-directory: infra/terraform
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
       - name: Terraform Plan (Drift Check)
         id: plan
-        run: terraform plan -no-color -detailed-exitcode
-        working-directory: terraform
-        continue-on-error: true
+        run: |
+          set +e
+          terraform plan -no-color -detailed-exitcode
+          exit_code=$?
+          echo "exit_code=${exit_code}" >> "$GITHUB_OUTPUT"
+          if [ "$exit_code" -eq 1 ]; then
+            exit 1
+          fi
+          exit 0
+        working-directory: infra/terraform
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
       - name: Check for Drift
-        if: steps.plan.outputs.exitcode == 2
+        if: steps.plan.outputs.exit_code == '2'
         run: |
           echo "::warning::TERRAFORM DRIFT DETECTED! Infrastructure has drifted from the state file."
           echo "DRIFT_DETECTED=true" >> $GITHUB_ENV

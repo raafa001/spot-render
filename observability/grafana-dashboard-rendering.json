@@ -1,0 +1,76 @@
+{
+  "title": "Spot Render - Pipeline",
+  "uid": "spot-render",
+  "version": 1,
+  "timezone": "browser",
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "Frames renderizados por minuto",
+      "targets": [
+        {
+          "expr": "sum(rate(blender_frames_total[5m]))",
+          "legendFormat": "Total"
+        }
+      ],
+      "id": 1,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Uso de CPU dos workers",
+      "targets": [
+        {
+          "expr": "avg(node_namespace_pod_container:container_cpu_usage_seconds_total:sum_irate{namespace=\"rendering\",pod=~\"blender-worker.*\"})",
+          "legendFormat": "CPU"
+        }
+      ],
+      "id": 2,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Taxa de erro HTTP 5xx",
+      "targets": [
+        {
+          "expr": "sum(rate(http_requests_total{service=\"render-api\",status=~\"5..\"}[5m])) / sum(rate(http_requests_total{service=\"render-api\"}[5m]))",
+          "legendFormat": "Erro"
+        }
+      ],
+      "id": 3,
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 0,
+        "y": 8
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Latência p95 da API",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{service=\"render-api\"}[5m])) by (le))",
+          "legendFormat": "p95"
+        }
+      ],
+      "id": 4,
+      "gridPos": {
+        "h": 6,
+        "w": 12,
+        "x": 6,
+        "y": 8
+      }
+    }
+  ]
+}

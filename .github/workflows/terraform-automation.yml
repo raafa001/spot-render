@@ -28,9 +28,9 @@ on:
       working-dir:
         description: Target working directory
         required: true
-        type: choice
-        options:
-          - terraform
+       type: choice
+       options:
+          - infra/terraform
 
 permissions:
   contents: read
@@ -43,7 +43,7 @@ jobs:
       (github.event_name == 'push' && github.ref != 'refs/heads/main')
     uses: raafa001/github-workflows/.github/workflows/terraform-plan-apply.yml@main
     with:
-      working-dirs: '["terraform"]'
+      working-dirs: '["infra/terraform"]'
       command: plan
       pr-number: ${{ github.event.pull_request.number || 0 }}
       ref: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -56,7 +56,7 @@ jobs:
       startsWith(github.event.comment.body, '/terraform plan')
     uses: raafa001/github-workflows/.github/workflows/terraform-plan-apply.yml@main
     with:
-      working-dirs: '["terraform"]'
+      working-dirs: '["infra/terraform"]'
       command: plan
       pr-number: ${{ github.event.issue.number }}
       ref: refs/pull/${{ github.event.issue.number }}/head
@@ -68,7 +68,7 @@ jobs:
       github.event.issue.pull_request != '' &&
       (startsWith(github.event.comment.body, '/terraform apply') ||
        startsWith(github.event.comment.body, '/terraform destroy'))
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - name: Show apply/destroy instructions
         uses: actions/github-script@v7
@@ -83,16 +83,16 @@ jobs:
               issue_number: prNum,
               body: `## Terraform ${cmd} — Confirmation Required
 
-To ${cmd} infrastructure, use **workflow_dispatch**:
+              To ${cmd} infrastructure, use **workflow_dispatch**:
 
-1. Go to [Terraform Automation Action](${runUrl})
-2. Click **Run workflow**
-3. Set \`command\` to \`${cmd}\`
-4. Set \`confirm\` to \`yes\`
-5. Select the target \`working-dir\`
-6. Click **Run workflow**
+              1. Go to [Terraform Automation Action](${runUrl})
+              2. Click **Run workflow**
+              3. Set \`command\` to \`${cmd}\`
+              4. Set \`confirm\` to \`yes\`
+              5. Select the target \`working-dir\`
+              6. Click **Run workflow**
 
-⚠️ This will ${cmd} infrastructure. Double-check the plan first!`
+              ⚠️ This will ${cmd} infrastructure. Double-check the plan first!`
             });
 
   manual:

@@ -1,0 +1,30 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: rendering
+commonLabels:
+  app.kubernetes.io/managed-by: kustomize
+  app.kubernetes.io/part-of: spot-render
+resources:
+  - namespace.yaml
+  - issuer-cluster.yaml
+  - certificate.yaml
+  - priorityclass.yaml
+  - configmap-rendering.yaml
+  - pvc-render-assets.yaml
+  - networkpolicy.yaml
+  - serviceaccount-api.yaml
+  - serviceaccount-worker.yaml
+  - externalsecret-db.yaml
+  - service-api.yaml
+  - service-api-canary.yaml
+  - service-worker-metrics.yaml
+  - rollout-api.yaml
+  - deployment-worker.yaml
+  - hpa-api.yaml
+  - hpa-worker.yaml
+  - pdb-api.yaml
+  - pdb-worker.yaml
+  - ingress.yaml
+  - podmonitor-worker.yaml
+  - servicemonitor-api.yaml
+  - analysistemplate-rollout.yaml

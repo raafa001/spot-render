@@ -1,0 +1,33 @@
+# syntax=docker/dockerfile:1.7-labs
+
+ARG PYTHON_VERSION=3.12
+ARG PIP_VERSION=24.1.2
+
+FROM python:${PYTHON_VERSION}-slim AS base
+LABEL org.opencontainers.image.source="https://github.com/company/spot-render" \
+      org.opencontainers.image.description="API da fila de renderização Spot Render"
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1
+
+WORKDIR /app
+
+RUN addgroup --system app \
+    && adduser --system --ingroup app --uid 1000 app
+
+COPY services/api/requirements.txt ./
+RUN python -m pip install --upgrade "pip==${PIP_VERSION}" \
+    && pip install --no-cache-dir -r requirements.txt
+
+COPY services/api/ ./
+
+RUN chown -R app:app /app
+
+EXPOSE 8080
+
+USER app
+
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 CMD python -c "import urllib.request as u; u.urlopen('http://127.0.0.1:8080/healthz')" || exit 1
+
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]

@@ -1,0 +1,30 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "ec2:CreateLaunchTemplate",
+        "ec2:CreateFleet",
+        "ec2:DeleteLaunchTemplate",
+        "ec2:RunInstances",
+        "ec2:TerminateInstances",
+        "ec2:Describe*",
+        "ssm:GetParameter",
+        "pricing:GetProducts",
+        "iam:PassRole"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "sqs:DeleteMessage",
+        "sqs:GetQueueAttributes",
+        "sqs:GetQueueUrl",
+        "sqs:ReceiveMessage"
+      ],
+      "Resource": "*"
+    }
+  ]
+}

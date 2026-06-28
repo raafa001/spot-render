@@ -1,22 +1,33 @@
 # Terraform
 **/.terraform/
+.terraform/
 *.tfstate
 *.tfstate.*
 *.tfplan
 .terraform.lock.hcl
+terraform.tfvars
+terraform.tfvars.json
 
-# IDE
+# Build / deps
+target/
+dist/
+node_modules/
+tmp/
+coverage/
+__pycache__/
+.pytest_cache/
+
+# IDE / OS
 .vscode/
 .idea/
+*.iml
 *.swp
 *.swo
-
-# OS
 .DS_Store
 Thumbs.db
 
-# Scripts
+# Env / misc
 *.log
-
-# Build
-target/
+.env
+/.kubeconfig
+/artifacts
