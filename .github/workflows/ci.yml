@@ -105,7 +105,7 @@ jobs:
         if: steps.sonar-creds.outputs.missing == 'false' && steps.sonar-available.outputs.reachable == 'true'
         run: |
           SCANNER_VERSION=5.0.1.3006
-          curl -sSLo sonar-scanner.zip \
+          curl -sSfLo sonar-scanner.zip \
             "https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-${SCANNER_VERSION}-linux-x64.zip"
           unzip -qo sonar-scanner.zip
           mv sonar-scanner-* sonar-scanner

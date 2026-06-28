@@ -49,7 +49,9 @@ module "database" {
   username               = var.database_username
   password               = var.database_password
   subnet_ids             = module.network.database_subnet_ids
-  vpc_security_group_ids = compact([module.network.database_security_group_id])
+  vpc_security_group_ids = []
+  vpc_id                 = module.network.vpc_id
+  vpc_cidr               = var.vpc_cidr
 
   local_namespace    = var.local_namespace
   local_storage_size = var.local_postgres_storage_size

@@ -29,3 +29,15 @@ variable "enable_flow_logs" {
   type        = bool
   default     = true
 }
+
+variable "flow_logs_retention_days" {
+  description = "Retenção dos logs em dias (mínimo 365 para compliance)."
+  type        = number
+  default     = 400
+}
+
+variable "flow_logs_kms_key_arn" {
+  description = "ARN de uma KMS Key existente para criptografar o CloudWatch Log Group. Se vazio, o módulo cria uma."
+  type        = string
+  default     = null
+}

@@ -103,36 +103,27 @@ resource "aws_route_table_association" "private" {
   route_table_id = aws_route_table.private[count.index].id
 }
 
-resource "aws_security_group" "database" {
-  count  = var.create ? 1 : 0
-  name   = "spot-render-db"
-  vpc_id = aws_vpc.this[0].id
-
-  description = "Banco de dados PostgreSQL"
-
-  ingress {
-    description = "PostgreSQL"
-    from_port   = 5432
-    to_port     = 5432
-    protocol    = "tcp"
-    cidr_blocks = [var.vpc_cidr]
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = merge(local.tags, { Name = "spot-render-db" })
-}
-
 resource "aws_cloudwatch_log_group" "flow_logs" {
   count             = var.create && var.enable_flow_logs ? 1 : 0
   name              = "/aws/vpc/spot-render-${var.environment}"
-  retention_in_days = 7
+  retention_in_days = var.flow_logs_retention_days
+  kms_key_id        = var.flow_logs_kms_key_arn != null ? var.flow_logs_kms_key_arn : try(aws_kms_key.flow_logs[0].arn, null)
   tags              = local.tags
+}
+
+resource "aws_kms_key" "flow_logs" {
+  count                   = var.create && var.enable_flow_logs && (var.flow_logs_kms_key_arn == null || var.flow_logs_kms_key_arn == "") ? 1 : 0
+  description             = "KMS key for VPC Flow Logs"
+  enable_key_rotation     = true
+  deletion_window_in_days = 7
+
+  tags = merge(local.tags, { Name = "spot-render-flow-logs" })
+}
+
+resource "aws_kms_alias" "flow_logs" {
+  count         = var.create && var.enable_flow_logs && (var.flow_logs_kms_key_arn == null || var.flow_logs_kms_key_arn == "") ? 1 : 0
+  name          = "alias/spot-render-flow-logs"
+  target_key_id = aws_kms_key.flow_logs[0].key_id
 }
 
 resource "aws_flow_log" "this" {
@@ -171,6 +162,20 @@ resource "aws_iam_role_policy" "flow_logs" {
       Resource = "${aws_cloudwatch_log_group.flow_logs[0].arn}:*"
     }]
   })
+}
+
+resource "aws_default_security_group" "this" {
+  count  = var.create ? 1 : 0
+  vpc_id = aws_vpc.this[0].id
+
+  ingress = []
+  egress  = []
+
+  tags = merge(local.tags, { Name = "spot-render-default-sg" })
+
+  lifecycle {
+    ignore_changes = [ingress, egress, tags]
+  }
 }
 
 data "aws_availability_zones" "available" {

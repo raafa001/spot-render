@@ -5,6 +5,42 @@ locals {
   }
 }
 
+resource "aws_security_group" "db" {
+  count = var.create_rds && length(var.vpc_security_group_ids) == 0 ? 1 : 0
+
+  name_prefix = "spot-render-db-"
+  description = "Acesso interno ao PostgreSQL"
+  vpc_id      = var.vpc_id
+
+  ingress {
+    description = "PostgreSQL"
+    from_port   = 5432
+    to_port     = 5432
+    protocol    = "tcp"
+    cidr_blocks = var.vpc_cidr != null ? [var.vpc_cidr] : ["10.0.0.0/16"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = merge(local.tags, { Name = "spot-render-db" })
+
+  lifecycle {
+    precondition {
+      condition     = var.vpc_id != null
+      error_message = "vpc_id deve ser fornecido quando nenhum security group externo é informado."
+    }
+  }
+}
+
+locals {
+  effective_security_groups = length(var.vpc_security_group_ids) > 0 ? var.vpc_security_group_ids : aws_security_group.db[*].id
+}
+
 resource "aws_db_subnet_group" "this" {
   count      = var.create_rds ? 1 : 0
   name       = "spot-render-db"
@@ -51,11 +87,12 @@ resource "aws_db_instance" "this" {
   copy_tags_to_snapshot                 = true
   parameter_group_name                  = aws_db_parameter_group.postgres[0].name
   db_subnet_group_name                  = aws_db_subnet_group.this[0].name
-  vpc_security_group_ids                = var.vpc_security_group_ids
+  vpc_security_group_ids                = local.effective_security_groups
   publicly_accessible                   = false
   monitoring_interval                   = var.enable_monitoring ? 60 : 0
   performance_insights_enabled          = var.enable_monitoring
   performance_insights_retention_period = var.enable_monitoring ? 7 : null
+  ca_cert_identifier                    = var.ca_cert_identifier
 
   tags = local.tags
 }

@@ -25,11 +25,6 @@ output "nat_gateway_ids" {
   description = "IDs dos NAT Gateways."
 }
 
-output "database_security_group_id" {
-  value       = try(aws_security_group.database[0].id, null)
-  description = "Security Group usado pelo banco de dados."
-}
-
 output "database_subnet_ids" {
   value       = local.private_ids
   description = "Subnets usadas pelo RDS."

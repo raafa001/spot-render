@@ -227,6 +227,8 @@ resource "aws_iam_role_policy" "karpenter_controller" {
 resource "aws_sqs_queue" "karpenter_interrupts" {
   count = var.create && var.enable_karpenter ? 1 : 0
   name  = "spot-render-karpenter-interrupts"
+
+  sqs_managed_sse_enabled = true
 }
 
 resource "aws_cloudwatch_event_rule" "spot_interrupts" {

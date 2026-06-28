@@ -53,6 +53,18 @@ variable "vpc_security_group_ids" {
   default     = []
 }
 
+variable "vpc_id" {
+  description = "ID da VPC onde o RDS será provisionado (necessário quando nenhum SG é informado)."
+  type        = string
+  default     = null
+}
+
+variable "vpc_cidr" {
+  description = "CIDR da VPC para liberar acesso interno."
+  type        = string
+  default     = null
+}
+
 variable "local_namespace" {
   description = "Namespace local."
   type        = string
@@ -72,4 +84,10 @@ variable "enable_monitoring" {
   description = "Ativa Performance Insights/Monitoramento."
   type        = bool
   default     = true
+}
+
+variable "ca_cert_identifier" {
+  description = "Certificado TLS utilizado pelo RDS para criptografia in-transit."
+  type        = string
+  default     = "rds-ca-rsa4096-g1"
 }
