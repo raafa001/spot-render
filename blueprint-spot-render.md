@@ -50,7 +50,8 @@ Cada repositório terá README PT/EN com quickstart, pipelines, dependências e 
 #### Upload / API / CLI
 
 - Endpoint `POST /uploads` recebe arquivo + `funcionario`, `empreendimento`, `variacao`, `origem`.  
-- CLI (Python) salva o funcionário em `~/.spotrender/config` na primeira execução.  
+- Campo opcional `renderlist` (CSV/XLSX) permite enviar listas de renderização atualizadas. Os arquivos fornecidos internamente (ex.: `render-list*.csv/xlsx`) permanecem fora do Git e apenas trafegam via API/portal.
+- CLI (Python) salva o funcionário em `~/.spotrender/config` na primeira execução e aceita `--renderlist` opcional.  
 - API escreve em S3 `spot-render-input/{projeto}/{variacao}/{timestamp}/…` e atualiza métricas (`render_queue_total`).
 
 #### Argo Workflows
