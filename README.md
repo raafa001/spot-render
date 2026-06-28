@@ -32,6 +32,7 @@ spot-render/
 ├── services/api/                   # API FastAPI + requirements
 ├── workers/blender-runner/         # Entrypoint e Dockerfile do worker Blender
 ├── Dockerfile.api / Dockerfile.worker
+├── sonar-project.properties        # Config Sonar (fontes/tests/coverage)
 └── requirements-dev.txt            # Dependências de testes (pytest etc.)
 ```
 
@@ -85,7 +86,7 @@ O overlay `prd` troca StorageClass para EFS CSI, ingress para ALB + WAF e imagen
 
 | Workflow | Quando roda | O que faz |
 | --- | --- | --- |
-| `ci.yml` | push/PR em `main` | ShellCheck + Hadolint, SonarQube (`SONAR_HOST_URL`/`SONAR_TOKEN`), Trivy FS, pytest com cobertura, build/push condicional (Docker Hub vs. ECR), Trivy nas imagens e trigger ArgoCD |
+| `ci.yml` | push/PR em `main` | ShellCheck + Hadolint, **tfsec + Checkov em `infra/terraform`**, SonarQube (scanner CLI apontando para `SONAR_HOST_URL`), Trivy FS, pytest com cobertura, build/push condicional (Docker Hub vs. ECR), Trivy nas imagens e trigger ArgoCD |
 | `terraform-plan.yml` | push em `infra/terraform/**`, cron 00h/08h/16h e manual | `terraform fmt -check` + `terraform plan` com upload do artefato `tfplan`, ajudando a detectar drift de forma contínua |
 | `terraform-apply.yml` | manual (`workflow_dispatch`) | Executa `terraform apply` após aprovação humana (configure o ambiente protegido **platform-infra** no GitHub repo settings) |
 
@@ -145,7 +146,7 @@ Same as above (see tree). Legacy Jenkins/Groovy assets remain on `main`; the mod
 
 | Workflow | Trigger | Purpose |
 | --- | --- | --- |
-| `ci.yml` | push/PR on `main` | ShellCheck + Hadolint, SonarQube (`SONAR_HOST_URL` / `SONAR_TOKEN` secrets), Trivy filesystem, pytest, Buildx push (Docker Hub vs. ECR), Trivy on both images, ArgoCD webhook |
+| `ci.yml` | push/PR on `main` | ShellCheck + Hadolint, **tfsec + Checkov (infra/terraform)**, SonarQube CLI (uses `SONAR_HOST_URL`/`SONAR_TOKEN`), Trivy filesystem, pytest, Buildx push (Docker Hub vs. ECR), image Trivy scans, ArgoCD webhook |
 | `terraform-plan.yml` | push to `infra/terraform/**`, cron 00:00/08:00/16:00 UTC, manual | Runs `terraform fmt -check` + `terraform plan` and uploads the plan artifact for drift detection |
 | `terraform-apply.yml` | manual (`workflow_dispatch`) | Executes `terraform apply` after human approval (protect the `platform-infra` environment to enforce reviewers) |
 

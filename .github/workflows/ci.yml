@@ -41,6 +41,33 @@ jobs:
           dockerfile: Dockerfile.worker
         continue-on-error: true
 
+  iac-security:
+    name: IaC Security
+    runs-on: ubuntu-24.04
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Terraform CLI
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: 1.9.0
+
+      - name: Terraform fmt check
+        working-directory: infra/terraform
+        run: terraform fmt -check -recursive
+
+      - name: tfsec
+        uses: aquasecurity/tfsec-action@v1.0.3
+        with:
+          working_directory: infra/terraform
+
+      - name: Checkov
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: infra/terraform
+          framework: terraform
+
   sonarqube:
     name: SonarQube Scan
     runs-on: self-hosted
@@ -68,14 +95,31 @@ jobs:
             echo "reachable=false" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Install scanner dependencies
+        if: steps.sonar-creds.outputs.missing == 'false' && steps.sonar-available.outputs.reachable == 'true'
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y openjdk-17-jre-headless unzip curl
+
+      - name: Download Sonar Scanner CLI
+        if: steps.sonar-creds.outputs.missing == 'false' && steps.sonar-available.outputs.reachable == 'true'
+        run: |
+          SCANNER_VERSION=5.0.1.3006
+          curl -sSLo sonar-scanner.zip \
+            "https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-${SCANNER_VERSION}-linux-x64.zip"
+          unzip -qo sonar-scanner.zip
+          mv sonar-scanner-* sonar-scanner
+          echo "${{ github.workspace }}/sonar-scanner/bin" >> "$GITHUB_PATH"
+
       - name: SonarQube
         if: steps.sonar-creds.outputs.missing == 'false' && steps.sonar-available.outputs.reachable == 'true'
-        uses: sonarsource/sonarqube-scan-action@v2
-        with:
-          options: --net=host
         env:
           SONAR_HOST_URL: ${{ env.SONAR_HOST_URL }}
           SONAR_TOKEN: ${{ env.SONAR_TOKEN }}
+        run: |
+          sonar-scanner \
+            -Dsonar.host.url="$SONAR_HOST_URL" \
+            -Dsonar.login="$SONAR_TOKEN"
 
       - name: Sonar skipped summary
         if: steps.sonar-creds.outputs.missing == 'true'
@@ -102,7 +146,7 @@ jobs:
 
   unit-tests:
     name: API Unit Tests
-    runs-on: self-hosted
+    runs-on: ubuntu-24.04
     needs: lint
     steps:
       - uses: actions/checkout@v4
@@ -133,6 +177,7 @@ jobs:
       - sonarqube
       - trivy
       - unit-tests
+      - iac-security
     env:
       AWS_REGION: us-east-1
       DOCKERHUB_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE || 'spotrender' }}
@@ -218,6 +263,7 @@ jobs:
       - sonarqube
       - trivy
       - unit-tests
+      - iac-security
     steps:
       - uses: actions/github-script@v7
         with:
