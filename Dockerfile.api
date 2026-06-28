@@ -4,6 +4,7 @@ ARG PYTHON_VERSION=3.12
 ARG PIP_VERSION=24.1.2
 
 FROM python:${PYTHON_VERSION}-slim AS base
+ARG PIP_VERSION
 LABEL org.opencontainers.image.source="https://github.com/company/spot-render" \
       org.opencontainers.image.description="API da fila de renderização Spot Render"
 
