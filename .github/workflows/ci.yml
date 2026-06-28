@@ -106,11 +106,23 @@ jobs:
         run: |
           set -euo pipefail
           SCANNER_VERSION=5.0.1.3006
-          PRIMARY_URL="https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-${SCANNER_VERSION}-linux-x64.zip"
-          FALLBACK_URL="https://github.com/SonarSource/sonar-scanner-cli/releases/download/v${SCANNER_VERSION}/sonar-scanner-cli-${SCANNER_VERSION}-linux-x64.zip"
-          if ! curl -sSfLo sonar-scanner.zip "$PRIMARY_URL"; then
-            echo "Primary Sonar download failed (HTTP error). Using fallback mirror..."
-            curl -sSfLo sonar-scanner.zip "$FALLBACK_URL"
+          URLS=(
+            "https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-${SCANNER_VERSION}-linux-x64.zip"
+            "https://github.com/SonarSource/sonar-scanner-cli/releases/download/v${SCANNER_VERSION}/sonar-scanner-cli-${SCANNER_VERSION}-linux-x64.zip"
+            "https://github.com/SonarSource/sonar-scanner-cli/releases/download/${SCANNER_VERSION}/sonar-scanner-cli-${SCANNER_VERSION}-linux-x64.zip"
+          )
+          SUCCESS=0
+          for url in "${URLS[@]}"; do
+            echo "Attempting to download Sonar scanner from $url"
+            if curl -sSfLo sonar-scanner.zip "$url"; then
+              SUCCESS=1
+              break
+            fi
+            echo "Download failed from $url"
+          done
+          if [ "$SUCCESS" -ne 1 ]; then
+            echo "Unable to download Sonar scanner from all mirrors"
+            exit 1
           fi
           unzip -qo sonar-scanner.zip
           mv sonar-scanner-* sonar-scanner
