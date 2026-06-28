@@ -99,21 +99,40 @@ jobs:
         if: steps.sonar-creds.outputs.missing == 'false' && steps.sonar-available.outputs.reachable == 'true'
         run: |
           sudo apt-get update -y
-          sudo apt-get install -y openjdk-17-jre-headless unzip curl
+          sudo apt-get install -y openjdk-17-jre-headless unzip curl sonar-scanner-cli || true
 
       - name: Download Sonar Scanner CLI
         if: steps.sonar-creds.outputs.missing == 'false' && steps.sonar-available.outputs.reachable == 'true'
         run: |
           set -euo pipefail
+          if command -v sonar-scanner >/dev/null 2>&1; then
+            echo "Found sonar-scanner in PATH: $(command -v sonar-scanner)"
+            exit 0
+          fi
           SCANNER_VERSION=5.0.1.3006
-          PRIMARY_URL="https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-${SCANNER_VERSION}-linux-x64.zip"
-          FALLBACK_URL="https://github.com/SonarSource/sonar-scanner-cli/releases/download/v${SCANNER_VERSION}/sonar-scanner-cli-${SCANNER_VERSION}-linux-x64.zip"
-          if ! curl -sSfLo sonar-scanner.zip "$PRIMARY_URL"; then
-            echo "Primary Sonar download failed (HTTP error). Using fallback mirror..."
-            curl -sSfLo sonar-scanner.zip "$FALLBACK_URL"
+          URLS=(
+            "https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-${SCANNER_VERSION}-linux.zip"
+            "https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-${SCANNER_VERSION}-linux-x64.zip"
+            "https://github.com/SonarSource/sonar-scanner-cli/releases/download/v${SCANNER_VERSION}/sonar-scanner-cli-${SCANNER_VERSION}-linux.zip"
+            "https://github.com/SonarSource/sonar-scanner-cli/releases/download/v${SCANNER_VERSION}/sonar-scanner-cli-${SCANNER_VERSION}.zip"
+            "https://github.com/SonarSource/sonar-scanner-cli/releases/latest/download/sonar-scanner-cli-linux.zip"
+          )
+          SUCCESS=0
+          for url in "${URLS[@]}"; do
+            echo "Attempting to download Sonar scanner from $url"
+            if curl -sSfLo sonar-scanner.zip "$url"; then
+              SUCCESS=1
+              break
+            fi
+            echo "Download failed from $url"
+          done
+          if [ "$SUCCESS" -ne 1 ]; then
+            echo "Unable to download Sonar scanner from all mirrors"
+            exit 1
           fi
           unzip -qo sonar-scanner.zip
-          mv sonar-scanner-* sonar-scanner
+          DIR=$(find . -maxdepth 1 -type d -name "sonar-scanner*" | head -n 1)
+          mv "$DIR" sonar-scanner
           echo "${{ github.workspace }}/sonar-scanner/bin" >> "$GITHUB_PATH"
 
       - name: SonarQube

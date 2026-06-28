@@ -106,6 +106,7 @@ O overlay `prd` troca StorageClass para EFS CSI, ingress para ALB + WAF e imagen
 
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md): detalhes de módulos Terraform, estratégia GitOps e segurança.
 - [`docs/OPERATIONS.md`](docs/OPERATIONS.md): guia completo (pré-reqs, troubleshooting, ingestão, verificação).
+- [`docs/QUALITY.md`](docs/QUALITY.md): passo a passo para executar e validar o SonarQube localmente, incluindo dicas de troubleshooting.
 
 ---
 
@@ -162,6 +163,7 @@ Same as above (see tree). Legacy Jenkins/Groovy assets remain on `main`; the mod
 
 - Use `docs/OPERATIONS.md` for step-by-step operations, health/HPA validation, troubleshooting.
 - Use `docs/ARCHITECTURE.md` for design rationale, module references, and security considerations.
+- Use `docs/QUALITY.md` for SonarQube execution tips and local validation workflow.
 
 ### License
 
