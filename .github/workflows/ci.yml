@@ -104,9 +104,14 @@ jobs:
       - name: Download Sonar Scanner CLI
         if: steps.sonar-creds.outputs.missing == 'false' && steps.sonar-available.outputs.reachable == 'true'
         run: |
+          set -euo pipefail
           SCANNER_VERSION=5.0.1.3006
-          curl -sSfLo sonar-scanner.zip \
-            "https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-${SCANNER_VERSION}-linux-x64.zip"
+          PRIMARY_URL="https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-${SCANNER_VERSION}-linux-x64.zip"
+          FALLBACK_URL="https://github.com/SonarSource/sonar-scanner-cli/releases/download/v${SCANNER_VERSION}/sonar-scanner-cli-${SCANNER_VERSION}-linux-x64.zip"
+          if ! curl -sSfLo sonar-scanner.zip "$PRIMARY_URL"; then
+            echo "Primary Sonar download failed (HTTP error). Using fallback mirror..."
+            curl -sSfLo sonar-scanner.zip "$FALLBACK_URL"
+          fi
           unzip -qo sonar-scanner.zip
           mv sonar-scanner-* sonar-scanner
           echo "${{ github.workspace }}/sonar-scanner/bin" >> "$GITHUB_PATH"

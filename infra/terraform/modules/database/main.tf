@@ -38,7 +38,8 @@ resource "aws_security_group" "db" {
 }
 
 locals {
-  effective_security_groups = length(var.vpc_security_group_ids) > 0 ? var.vpc_security_group_ids : aws_security_group.db[*].id
+  created_db_sg_ids         = try(aws_security_group.db[*].id, [])
+  effective_security_groups = length(var.vpc_security_group_ids) > 0 ? var.vpc_security_group_ids : local.created_db_sg_ids
 }
 
 resource "aws_db_subnet_group" "this" {
@@ -62,6 +63,11 @@ resource "aws_db_parameter_group" "postgres" {
   parameter {
     name  = "shared_buffers"
     value = "256MB"
+  }
+
+  parameter {
+    name  = "rds.force_ssl"
+    value = "1"
   }
 
   tags = local.tags
