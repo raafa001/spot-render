@@ -49,7 +49,7 @@ module "s3" {
 
 module "eks" {
   source  = "terraform-aws-modules/eks/aws"
-  version = "~> 20.36"
+  version = "~> 21.24"
   count   = var.deploy_kubernetes ? 1 : 0
 
   cluster_name    = var.cluster_name
