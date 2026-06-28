@@ -6,6 +6,10 @@
 >
 > **EN:** Spot Render delivers an end-to-end Dev→Prod path for Blender/Cycles workloads by mixing IaC (Terraform), Kustomize + GitOps (ArgoCD), and ready-to-use observability. The design favors on-demand/spot GPUs, shared RWX storage (local-path or EFS), and a secure release train (WAF, automated TLS, canary analysis via Argo Rollouts).
 
+> **Stacks atualizados / Refreshed stacks:**
+> - **API:** Python 3.12 + FastAPI 0.136.3 (uvicorn 0.49.0, Redis 8.0.1, pydantic-settings 2.14.2).
+> - **Workers:** Blender 5.1.0 (tarball oficial) executando sobre CUDA 12.6 runtime para suportar GPUs g5/g6.
+
 ## 2. Terraform
 
 > **PT-BR:**

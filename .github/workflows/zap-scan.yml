@@ -22,7 +22,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: ZAP Full Scan
-        uses: zaproxy/action-full-scan@v0
+        uses: zaproxy/action-full-scan@v0.13.0
         with:
           target: ${{ github.event.inputs.target || 'https://monitoring.example.com' }}
           cmd_options: "-a"

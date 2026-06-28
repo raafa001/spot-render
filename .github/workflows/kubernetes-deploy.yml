@@ -32,7 +32,7 @@ jobs:
     name: Validate Manifests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
 
       - uses: imranismail/setup-kustomize@v2
         with:
@@ -56,7 +56,7 @@ jobs:
     runs-on: ubuntu-latest
     if: ${{ !inputs.dry-run }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
 
       - uses: imranismail/setup-kustomize@v2
         with:
@@ -84,9 +84,11 @@ jobs:
           kubectl get svc -n "$TARGET_NAMESPACE"
 
       - name: Verify deployment
+        env:
+          TARGET_NAMESPACE: ${{ inputs.namespace != '' && inputs.namespace || 'rendering' }}
         run: |
-          kubectl get pods -n ${{ inputs.namespace }}
-          kubectl get svc -n ${{ inputs.namespace }}
+          kubectl get pods -n "$TARGET_NAMESPACE"
+          kubectl get svc -n "$TARGET_NAMESPACE"
 
   dry-run:
     name: Dry Run
@@ -94,7 +96,7 @@ jobs:
     runs-on: ubuntu-latest
     if: ${{ inputs.dry-run }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
 
       - uses: imranismail/setup-kustomize@v2
         with:

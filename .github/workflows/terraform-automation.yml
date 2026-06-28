@@ -28,9 +28,9 @@ on:
       working-dir:
         description: Target working directory
         required: true
-        type: choice
-        options:
-          - terraform
+       type: choice
+       options:
+          - infra/terraform
 
 permissions:
   contents: read
@@ -43,7 +43,7 @@ jobs:
       (github.event_name == 'push' && github.ref != 'refs/heads/main')
     uses: raafa001/github-workflows/.github/workflows/terraform-plan-apply.yml@main
     with:
-      working-dirs: '["terraform"]'
+      working-dirs: '["infra/terraform"]'
       command: plan
       pr-number: ${{ github.event.pull_request.number || 0 }}
       ref: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -56,7 +56,7 @@ jobs:
       startsWith(github.event.comment.body, '/terraform plan')
     uses: raafa001/github-workflows/.github/workflows/terraform-plan-apply.yml@main
     with:
-      working-dirs: '["terraform"]'
+      working-dirs: '["infra/terraform"]'
       command: plan
       pr-number: ${{ github.event.issue.number }}
       ref: refs/pull/${{ github.event.issue.number }}/head

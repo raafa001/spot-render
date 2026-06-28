@@ -11,8 +11,8 @@ local_storage_class_name     = "local-path"
 local_postgres_storage_size  = "50Gi"
 
 # Configurações do cluster (usadas quando enable_aws = true)
-eks_cluster_name    = "spot-render-eks"
-eks_cluster_version = "1.29"
+eks_cluster_name       = "spot-render-eks"
+eks_cluster_version    = "1.35"
 eks_gpu_instance_types = ["g5.2xlarge"]
 
 # Banco de dados

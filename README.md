@@ -58,10 +58,9 @@ docker build -f Dockerfile.worker -t local/spot-render-worker:dev .
 # 2. Aplicar overlay local
 kubectl apply -k k8s/overlays/local
 
-# 3. Alimentar a fila
+# 3. Alimentar a fila (usa demo oficial do Blender)
 export ASSETS_DIR="$HOME/spot-render-assets"
-mkdir -p "$ASSETS_DIR"/{queue,output,completed,failed}
-cp sample.blend "$ASSETS_DIR"/queue/
+./scripts/seed-render-queue.sh --assets-dir "$ASSETS_DIR"
 ```
 
 Workers monitoram `/mnt/assets/queue` (montado via PV local-path). Arquivos prontos vão para `output/<job>` e originais são movidos para `completed/`/`failed/` conforme status.

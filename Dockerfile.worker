@@ -1,9 +1,9 @@
 # syntax=docker/dockerfile:1.7-labs
 
 # hadolint ignore=DL3006
-ARG CUDA_IMAGE=nvidia/cuda:12.3.1-runtime-ubuntu22.04
-ARG BLENDER_VERSION=4.1.1
-ARG BLENDER_BRANCH=Blender4.1
+ARG CUDA_IMAGE=nvidia/cuda:12.6.0-runtime-ubuntu22.04
+ARG BLENDER_VERSION=5.1.0
+ARG BLENDER_BRANCH=Blender5.1
 
 # hadolint ignore=DL3006
 FROM ${CUDA_IMAGE} AS blender

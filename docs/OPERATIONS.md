@@ -46,6 +46,18 @@ kubectl apply -k k8s/overlays/local
 > 💡 **PT-BR:** Ao usar Docker Desktop, monte o diretório `$ASSETS_DIR` em `/data/render-assets` para que o PV `render-assets-local` enxergue os arquivos.  
 > 💡 **EN:** When using Docker Desktop, bind-mount `$ASSETS_DIR` into `/data/render-assets` so the `render-assets-local` PV can see the files.
 
+#### Semear a fila com demos oficiais / Seed the queue with official demos
+
+> **PT-BR:** Utilize o script `scripts/seed-render-queue.sh` para baixar o arquivo "Raycast Lines" do Blender e movê-lo automaticamente para a fila local. O script cria as pastas `queue/output/completed/failed` caso ainda não existam.  
+> **EN:** Use the `scripts/seed-render-queue.sh` helper to download Blender's "Raycast Lines" demo file and drop it straight into the local queue. The script also prepares the `queue/output/completed/failed` folders if needed.
+
+```bash
+export ASSETS_DIR="$HOME/spot-render-assets"
+./scripts/seed-render-queue.sh --assets-dir "$ASSETS_DIR"
+```
+
+> **Referência / Reference:** Blender demo files catalog ([blender.org/download/demo-files](https://www.blender.org/download/demo-files/)).
+
 ### Passo 2: Build e carga das imagens locais / Build & load local images
 
 > **PT-BR:** Gere as imagens da API e do worker e carregue-as no cluster para evitar push externo.
