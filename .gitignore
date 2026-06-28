@@ -31,3 +31,8 @@ Thumbs.db
 .env
 /.kubeconfig
 /artifacts
+# Sensitive test data
+render-list*.csv
+render-list*.tsv
+render-list*.xlsx
+T4Eco*
