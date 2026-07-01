@@ -27,19 +27,16 @@ jobs:
         with:
           severity: warning
           ignore_paths: scripts/configure-jenkins.sh
-        continue-on-error: true
 
       - name: Hadolint (API)
         uses: hadolint/hadolint-action@v3.1.0
         with:
           dockerfile: Dockerfile.api
-        continue-on-error: true
 
       - name: Hadolint (Worker)
         uses: hadolint/hadolint-action@v3.1.0
         with:
           dockerfile: Dockerfile.worker
-        continue-on-error: true
 
   iac-security:
     name: IaC Security
@@ -161,12 +158,16 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Trivy Filesystem Scan
-        uses: aquasecurity/trivy-action@v0.36.0
+        uses: aquasecurity/trivy-action@v0.40.0
         with:
           scan-type: fs
           scan-ref: .
           format: table
-          exit-code: 0
+          severity: CRITICAL,HIGH
+          ignore-unfixed: false
+          exit-code: 1
+          scanners: vuln,secret
+          trivy-version: v0.45.0
 
   unit-tests:
     name: API Unit Tests
@@ -191,7 +192,7 @@ jobs:
       - name: Run pytest
         run: |
           source .venv/bin/activate
-          pytest --cov=services/api --cov-report=xml
+          pytest --cov=services/api --cov-report=xml --cov-report=term-missing --cov-fail-under=80
 
   docker-build:
     name: Build & Publish Images
@@ -266,17 +267,23 @@ jobs:
 
       - name: Trivy image scan (API)
         if: github.event_name == 'push'
-        uses: aquasecurity/trivy-action@v0.36.0
+        uses: aquasecurity/trivy-action@v0.40.0
         with:
           image-ref: ${{ steps.images.outputs.api_image }}
           severity: CRITICAL,HIGH
+          ignore-unfixed: false
+          trivy-version: v0.45.0
+          exit-code: 1
 
       - name: Trivy image scan (worker)
         if: github.event_name == 'push'
-        uses: aquasecurity/trivy-action@v0.36.0
+        uses: aquasecurity/trivy-action@v0.40.0
         with:
           image-ref: ${{ steps.images.outputs.worker_image }}
           severity: CRITICAL,HIGH
+          ignore-unfixed: false
+          trivy-version: v0.45.0
+          exit-code: 1
 
   pr-comment:
     name: PR Comment Results
