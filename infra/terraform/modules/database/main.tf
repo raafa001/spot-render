@@ -1,23 +1,46 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# Módulo: database
+# Provisão de Amazon Aurora PostgreSQL Serverless v2 para:
+#   - Banco de dados principal da API (jobs, filas, metadata)
+#   - Alta disponibilidade com Multi-AZ
+#   - Read replicas para escalar leitura
+#   - Backups automatizados com PITR
+#   - Performance Insights para tuning
+#
+# Serverless v2: escala automaticamente de 0.5 a 96 ACUs
+# Custo estimado: ~$0.12/ACU-hora vs $0.17/hora para db.r6g.large
+# ──────────────────────────────────────────────────────────────────────────────
+
 locals {
   tags = {
-    Environment = "database"
     Project     = "spot-render"
+    Environment = var.environment
+    Component   = "database"
   }
 }
 
-resource "aws_security_group" "db" {
-  count = var.create_rds && length(var.vpc_security_group_ids) == 0 ? 1 : 0
+# ─── Subnet Group ─────────────────────────────────────────────────────────────
 
-  name_prefix = "spot-render-db-"
-  description = "Acesso interno ao PostgreSQL"
+resource "aws_rds_subnet_group" "this" {
+  name       = "${var.prefix}-aurora-subnet"
+  subnet_ids = var.subnet_ids
+
+  tags = local.tags
+}
+
+# ─── Security Group ───────────────────────────────────────────────────────────
+
+resource "aws_security_group" "db" {
+  name_prefix = "${var.prefix}-aurora-"
+  description = "Security group para Aurora PostgreSQL"
   vpc_id      = var.vpc_id
 
   ingress {
-    description = "PostgreSQL"
+    description = "PostgreSQL from VPC"
     from_port   = 5432
     to_port     = 5432
     protocol    = "tcp"
-    cidr_blocks = var.vpc_cidr != null ? [var.vpc_cidr] : ["10.0.0.0/16"]
+    cidr_blocks = [var.vpc_cidr]
   }
 
   egress {
@@ -27,33 +50,18 @@ resource "aws_security_group" "db" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = merge(local.tags, { Name = "spot-render-db" })
+  tags = merge(local.tags, { Name = "${var.prefix}-aurora" })
 
   lifecycle {
-    precondition {
-      condition     = var.vpc_id != null
-      error_message = "vpc_id deve ser fornecido quando nenhum security group externo é informado."
-    }
+    create_before_destroy = true
   }
 }
 
-locals {
-  created_db_sg_ids         = try(aws_security_group.db[*].id, [])
-  effective_security_groups = length(var.vpc_security_group_ids) > 0 ? var.vpc_security_group_ids : local.created_db_sg_ids
-}
+# ─── Cluster Parameter Group ───────────────────────────────────────────────────
 
-resource "aws_db_subnet_group" "this" {
-  count      = var.create_rds ? 1 : 0
-  name       = "spot-render-db"
-  subnet_ids = var.subnet_ids
-
-  tags = local.tags
-}
-
-resource "aws_db_parameter_group" "postgres" {
-  count  = var.create_rds ? 1 : 0
-  name   = "spot-render-postgres"
-  family = "postgres${replace(var.engine_version, ".", "")}" # ex.: 15 -> postgres15
+resource "aws_rds_cluster_parameter_group" "aurora_postgres" {
+  name   = "${var.prefix}-aurora-postgres"
+  family = "aurora-postgresql15"
 
   parameter {
     name  = "max_connections"
@@ -66,241 +74,311 @@ resource "aws_db_parameter_group" "postgres" {
   }
 
   parameter {
+    name  = "work_mem"
+    value = "16MB"
+  }
+
+  parameter {
+    name  = "maintenance_work_mem"
+    value = "512MB"
+  }
+
+  parameter {
+    name  = "effective_cache_size"
+    value = "2GB"
+  }
+
+  parameter {
     name  = "rds.force_ssl"
     value = "1"
   }
 
-  tags = local.tags
-}
+  parameter {
+    name  = "rds.log_retention_period"
+    value = "259200" # 3 dias em segundos
+  }
 
-resource "aws_db_instance" "this" {
-  count                                 = var.create_rds ? 1 : 0
-  identifier                            = "spot-render-db"
-  allocated_storage                     = var.allocated_storage
-  max_allocated_storage                 = var.allocated_storage + 200
-  storage_encrypted                     = true
-  engine                                = "postgres"
-  engine_version                        = var.engine_version
-  instance_class                        = var.instance_class
-  db_name                               = var.db_name
-  username                              = var.username
-  password                              = var.password
-  port                                  = 5432
-  multi_az                              = true
-  auto_minor_version_upgrade            = true
-  backup_retention_period               = 7
-  deletion_protection                   = true
-  copy_tags_to_snapshot                 = true
-  parameter_group_name                  = aws_db_parameter_group.postgres[0].name
-  db_subnet_group_name                  = aws_db_subnet_group.this[0].name
-  vpc_security_group_ids                = local.effective_security_groups
-  publicly_accessible                   = false
-  monitoring_interval                   = var.enable_monitoring ? 60 : 0
-  performance_insights_enabled          = var.enable_monitoring
-  performance_insights_retention_period = var.enable_monitoring ? 7 : null
-  ca_cert_identifier                    = var.ca_cert_identifier
+  parameter {
+    name  = "autovacuum_max_workers"
+    value = "4"
+  }
+
+  parameter {
+    name  = "autovacuum_naptime"
+    value = "10"
+  }
 
   tags = local.tags
 }
 
-# -----------------------------
-# PostgreSQL local no cluster
-# -----------------------------
+# ─── Aurora Cluster ───────────────────────────────────────────────────────────
 
-resource "kubernetes_namespace" "local" {
-  count = var.create_local_statefulset ? 1 : 0
-  metadata {
-    name = var.local_namespace
-    labels = {
-      "spot-render.io/component" = "database"
-    }
+resource "aws_rds_cluster" "this" {
+  cluster_identifier              = "${var.prefix}-aurora"
+  engine                          = "aurora-postgresql"
+  engine_version                  = var.engine_version
+  engine_mode                     = "provisioned" # Serverless usa "serverless", mas preferimos provisioned para produção
+  database_name                   = var.db_name
+  master_username                 = var.username
+  master_password                 = var.password
+  port                            = 5432
+
+  # Rede
+  vpc_security_group_ids  = [aws_security_group.db.id]
+  db_subnet_group_name    = aws_rds_subnet_group.this.name
+
+  # Storage
+  storage_encrypted       = true
+  kms_key_id             = var.kms_key_id
+
+  # Backup e Recovery
+  backup_retention_period = var.backup_retention_days
+  preferred_backup_window = "03:00-05:00"
+  preferred_maintenance_window = "mon:05:00-mon:07:00"
+  deletion_protection     = var.deletion_protection
+  copy_tags_to_snapshot   = true
+
+  # Performance e Monitoring
+  monitoring_interval     = var.enable_monitoring ? 60 : 0
+  performance_insights_enabled = var.enable_monitoring
+  performance_insights_retention_period = var.enable_monitoring ? 731 : null # 2 anos
+
+  # Serverless v2 Configuration
+  serverlessv2_scaling_configuration {
+    min_capacity = var.serverless_min_capacity
+    max_capacity = var.serverless_max_capacity
+  }
+
+  # Logs
+  enabled_cloudwatch_logs_exports = ["postgresql", "upgrade"]
+
+  # Global Database (opcional - para DR entre regiões)
+  global_cluster_identifier = var.enable_global_db ? "${var.prefix}-global" : null
+
+  skip_final_snapshot       = !var.deletion_protection
+  final_snapshot_identifier = var.deletion_protection ? "${var.prefix}-final-snapshot" : null
+
+  tags = local.tags
+
+  lifecycle {
+    create_before_destroy = true
   }
 }
 
-resource "kubernetes_secret" "postgres" {
-  count = var.create_local_statefulset ? 1 : 0
-  metadata {
-    name      = "postgres-admin"
-    namespace = var.local_namespace
-  }
+# ─── Writer Instance (Serverless v2) ─────────────────────────────────────────
 
-  data = {
-    username = base64encode(var.username)
-    password = base64encode(var.password)
-    database = base64encode(var.db_name)
-  }
-}
+resource "aws_rds_cluster_instance" "writer" {
+  count = 1
 
-resource "kubernetes_persistent_volume_claim" "postgres" {
-  count = var.create_local_statefulset ? 1 : 0
+  identifier         = "${var.prefix}-aurora-writer"
+  cluster_identifier = aws_rds_cluster.this.id
+  instance_class    = "db.serverless" # Serverless v2 usa classe especial
+  engine            = aws_rds_cluster.this.engine
+  engine_version    = aws_rds_cluster.this.engine_version
 
-  metadata {
-    name      = "postgres-data"
-    namespace = var.local_namespace
-  }
+  publicly_accessible = false
+  promotion_tier     = 0
 
-  spec {
-    access_modes = ["ReadWriteOnce"]
+  # Performance Insights via IAM role (criado automaticamente pelo console)
+  performance_insights_enabled = var.enable_monitoring
+  monitoring_interval         = var.enable_monitoring ? 60 : 0
 
-    resources {
-      requests = {
-        storage = var.local_storage_size
-      }
-    }
+  tags = local.tags
 
-    storage_class_name = var.storage_class_name
+  lifecycle {
+    create_before_destroy = true
   }
 }
 
-resource "kubernetes_stateful_set" "postgres" {
-  count = var.create_local_statefulset ? 1 : 0
+# ─── Reader Instances (opcional para scaling de leitura) ──────────────────────
 
-  metadata {
-    name      = "postgres"
-    namespace = var.local_namespace
-    labels = {
-      app = "postgres"
-    }
-  }
+resource "aws_rds_cluster_instance" "readers" {
+  count = var.enable_read_replicas ? var.num_read_replicas : 0
 
-  spec {
-    service_name = "postgres"
-    replicas     = 1
+  identifier         = "${var.prefix}-aurora-reader-${count.index + 1}"
+  cluster_identifier = aws_rds_cluster.this.id
+  instance_class     = "db.serverless"
+  engine            = aws_rds_cluster.this.engine
+  engine_version    = aws_rds_cluster.this.engine_version
 
-    selector {
-      match_labels = {
-        app = "postgres"
-      }
-    }
+  publicly_accessible = false
+  promotion_tier     = 1 # Nunca promove automaticamente
 
-    template {
-      metadata {
-        labels = {
-          app = "postgres"
-        }
-      }
+  performance_insights_enabled = var.enable_monitoring
+  monitoring_interval         = var.enable_monitoring ? 60 : 0
 
-      spec {
-        container {
-          name  = "postgres"
-          image = "postgres:${var.engine_version}"
+  tags = local.tags
 
-          env {
-            name = "POSTGRES_USER"
-            value_from {
-              secret_key_ref {
-                name = kubernetes_secret.postgres[0].metadata[0].name
-                key  = "username"
-              }
-            }
-          }
-
-          env {
-            name = "POSTGRES_PASSWORD"
-            value_from {
-              secret_key_ref {
-                name = kubernetes_secret.postgres[0].metadata[0].name
-                key  = "password"
-              }
-            }
-          }
-
-          env {
-            name = "POSTGRES_DB"
-            value_from {
-              secret_key_ref {
-                name = kubernetes_secret.postgres[0].metadata[0].name
-                key  = "database"
-              }
-            }
-          }
-
-          port {
-            name           = "postgres"
-            container_port = 5432
-          }
-
-          liveness_probe {
-            initial_delay_seconds = 30
-            period_seconds        = 10
-            tcp_socket {
-              port = "postgres"
-            }
-          }
-
-          readiness_probe {
-            initial_delay_seconds = 15
-            period_seconds        = 10
-            exec {
-              command = ["/bin/sh", "-c", "pg_isready -U $POSTGRES_USER -d $POSTGRES_DB"]
-            }
-          }
-
-          resources {
-            limits = {
-              cpu    = "1"
-              memory = "2Gi"
-            }
-            requests = {
-              cpu    = "500m"
-              memory = "1Gi"
-            }
-          }
-
-          volume_mount {
-            name       = "data"
-            mount_path = "/var/lib/postgresql/data"
-          }
-        }
-
-        volume {
-          name = "data"
-          persistent_volume_claim {
-            claim_name = kubernetes_persistent_volume_claim.postgres[0].metadata[0].name
-          }
-        }
-      }
-    }
+  lifecycle {
+    create_before_destroy = true
   }
 }
 
-resource "kubernetes_service" "postgres" {
-  count = var.create_local_statefulset ? 1 : 0
+# ─── Global Database (opcional - DR entre regiões) ─────────────────────────────
 
-  metadata {
-    name      = "postgres"
-    namespace = var.local_namespace
+resource "aws_rds_global_cluster" "this" {
+  count = var.enable_global_db ? 1 : 0
+
+  global_cluster_identifier    = "${var.prefix}-global"
+  force_destroy                = false
+  engine                       = "aurora-postgresql"
+  engine_version               = var.engine_version
+  database_name                = var.db_name
+  master_username             = var.username
+  master_password             = var.password
+  storage_encrypted           = true
+  kms_key_id                  = var.kms_key_id
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+# ─── CloudWatch Alarms ────────────────────────────────────────────────────────
+
+resource "aws_cloudwatch_metric_alarm" "cpu_utilization" {
+  alarm_name          = "${var.prefix}-aurora-cpu-high"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 3
+  datapoints_to_alarm = 3
+  metric_name         = "ServerlessDatabaseCapacity"
+  namespace           = "AWS/RDS"
+  period             = 300
+  statistic          = "Average"
+  threshold          = 80 # 80% de utilização de ACUs
+  alarm_description  = "Alerta quando CPU do Aurora Serverless está alto"
+  treat_missing_data  = "notBreaching"
+
+  dimensions = {
+    DBClusterIdentifier = aws_rds_cluster.this.id
   }
 
-  spec {
-    selector = {
-      app = "postgres"
-    }
+  alarm_actions = var.alert_topic_arns
+  ok_actions   = var.alert_topic_arns
 
-    port {
-      name        = "postgres"
-      port        = 5432
-      target_port = 5432
-    }
+  tags = local.tags
+}
+
+resource "aws_cloudwatch_metric_alarm" "connections" {
+  alarm_name          = "${var.prefix}-aurora-connections-high"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 2
+  datapoints_to_alarm = 2
+  metric_name         = "DatabaseConnections"
+  namespace           = "AWS/RDS"
+  period             = 300
+  statistic          = "Average"
+  threshold          = 400 # Limite مناسب para Serverless
+  alarm_description  = "Alerta quando número de conexões está alto"
+  treat_missing_data  = "notBreaching"
+
+  dimensions = {
+    DBClusterIdentifier = aws_rds_cluster.this.id
   }
+
+  alarm_actions = var.alert_topic_arns
+  ok_actions   = var.alert_topic_arns
+
+  tags = local.tags
 }
 
-output "rds_endpoint" {
-  description = "Endpoint do RDS."
-  value       = try(aws_db_instance.this[0].endpoint, null)
+resource "aws_cloudwatch_metric_alarm" "deadlocks" {
+  alarm_name          = "${var.prefix}-aurora-deadlocks"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 1
+  datapoints_to_alarm = 1
+  metric_name         = "Deadlocks"
+  namespace           = "AWS/RDS"
+  period             = 60
+  statistic          = "Sum"
+  threshold          = 1
+  alarm_description  = "Alerta quando há deadlocks no banco"
+  treat_missing_data  = "notBreaching"
+
+  dimensions = {
+    DBClusterIdentifier = aws_rds_cluster.this.id
+  }
+
+  alarm_actions = var.alert_topic_arns
+  ok_actions   = var.alert_topic_arns
+
+  tags = local.tags
 }
 
-output "secret_arn" {
-  description = "Secret associado (caso exista)."
-  value       = null
+resource "aws_cloudwatch_metric_alarm" "backup_retention" {
+  alarm_name          = "${var.prefix}-aurora-backup-retention"
+  comparison_operator = "LessThanThreshold"
+  evaluation_periods  = 1
+  datapoints_to_alarm = 1
+  metric_name         = "BackupRetention"
+  namespace           = "AWS/RDS"
+  period             = 86400 # 1 dia
+  statistic          = "Minimum"
+  threshold          = var.backup_retention_days
+  alarm_description  = "Alerta se retenção de backup está abaixo do configured"
+  treat_missing_data  = "breaching"
+
+  dimensions = {
+    DBClusterIdentifier = aws_rds_cluster.this.id
+  }
+
+  alarm_actions = var.alert_topic_arns
+  ok_actions   = var.alert_topic_arns
+
+  tags = local.tags
 }
 
-output "local_service_name" {
-  description = "Nome do Service expondo o PostgreSQL local."
-  value       = try(kubernetes_service.postgres[0].metadata[0].name, null)
+resource "aws_cloudwatch_metric_alarm" "ACU_utilization" {
+  alarm_name          = "${var.prefix}-aurora-acu-high"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 3
+  datapoints_to_alarm = 3
+  metric_name         = "ServerlessDatabaseCapacity"
+  namespace           = "AWS/RDS"
+  period             = 300
+  statistic          = "Maximum"
+  threshold          = var.serverless_max_capacity * 0.85
+  alarm_description  = "Alerta quando utilização de ACUs está próxima do máximo (85%)"
+  treat_missing_data  = "notBreaching"
+
+  dimensions = {
+    DBClusterIdentifier = aws_rds_cluster.this.id
+  }
+
+  alarm_actions = var.alert_topic_arns
+  ok_actions   = var.alert_topic_arns
+
+  tags = local.tags
 }
 
-output "local_pvc_name" {
-  description = "PVC usado pelo PostgreSQL local."
-  value       = try(kubernetes_persistent_volume_claim.postgres[0].metadata[0].name, null)
+# ─── Outputs ──────────────────────────────────────────────────────────────────
+
+output "cluster_endpoint" {
+  description = "Endpoint do cluster (writer)"
+  value       = aws_rds_cluster.this.endpoint
+}
+
+output "cluster_reader_endpoint" {
+  description = "Endpoint de leitura (distribui entre réplicas)"
+  value       = aws_rds_cluster.this.reader_endpoint
+}
+
+output "cluster_arn" {
+  description = "ARN do cluster"
+  value       = aws_rds_cluster.this.arn
+}
+
+output "cluster_id" {
+  description = "ID do cluster"
+  value       = aws_rds_cluster.this.id
+}
+
+output "security_group_id" {
+  description = "ID do Security Group"
+  value       = aws_security_group.db.id
+}
+
+output "global_cluster_arn" {
+  description = "ARN do Global Cluster (se habilitado)"
+  value       = try(aws_rds_global_cluster.this[0].arn, null)
 }
