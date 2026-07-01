@@ -24,7 +24,7 @@ FROM ${CUDA_IMAGE}
 
 ENV NVIDIA_VISIBLE_DEVICES=all \
     NVIDIA_DRIVER_CAPABILITIES=compute,utility \
-    BLENDER_PATH=/opt/blender \
+    BLENDER_PATH=/opt/blender/blender \
     PATH=/opt/blender:$PATH
 
 # hadolint ignore=DL3008
