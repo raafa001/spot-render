@@ -29,15 +29,17 @@ ENV NVIDIA_VISIBLE_DEVICES=all \
 
 # hadolint ignore=DL3008
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends python3 procps \
+    && apt-get install -y --no-install-recommends python3 python3-pip procps \
     && rm -rf /var/lib/apt/lists/*
 
 RUN groupadd -r render -g 1001 && useradd -r -g render -u 1001 render
 
 COPY --from=blender /opt/blender /opt/blender
 COPY workers/blender-runner/entrypoint.sh /usr/local/bin/entrypoint.sh
+COPY workers/blender-runner/worker-sqs.py /usr/local/bin/worker-sqs.py
 
-RUN chmod +x /usr/local/bin/entrypoint.sh
+RUN pip3 install --no-cache-dir boto3 requests \
+    && chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/worker-sqs.py
 
 VOLUME ["/mnt/assets"]
 

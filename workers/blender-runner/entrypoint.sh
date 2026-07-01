@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+WORKER_MODE=${WORKER_MODE:-filesystem}
 QUEUE_PATH=${QUEUE_PATH:-/mnt/assets/queue}
 OUTPUT_PATH=${OUTPUT_PATH:-/mnt/assets/output}
 PROCESSED_PATH=${PROCESSED_PATH:-/mnt/assets/completed}
@@ -18,6 +19,11 @@ touch "${METRICS_FILE}" "${READY_FILE}"
 log() {
   printf '[%s] %s\n' "$(date --iso-8601=seconds)" "$*" >&2
 }
+
+if [[ "${WORKER_MODE}" == "sqs" ]]; then
+  log "Worker iniciado em modo SQS"
+  exec python3 /usr/local/bin/worker-sqs.py
+fi
 
 update_metrics() {
   local frames_total=$1

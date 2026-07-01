@@ -37,7 +37,7 @@ import signal
 import sys
 import time
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
@@ -61,6 +61,7 @@ class JobConfig:
     sqs_queue_url: Optional[str] = None
     sqs_dlq_url: Optional[str] = None
     aws_region: str = "us-east-1"
+    aws_endpoint_url: Optional[str] = None
 
     # Paths
     output_path: str = "/mnt/assets/output"
@@ -70,6 +71,7 @@ class JobConfig:
     # Blender
     blender_path: str = "/opt/blender/blender"
     max_concurrent_frames: int = 1
+    render_device: str = "CPU"
 
     # API
     api_url: str = "http://localhost:8080"
@@ -77,6 +79,9 @@ class JobConfig:
 
     # Métricas
     metrics_port: int = 9100
+
+    # Área de trabalho temporária
+    working_dir: str = "/tmp/spot-render-worker"
 
     # Local queue (desenvolvimento)
     local_queue_enabled: bool = False
@@ -174,7 +179,7 @@ class SQSWorker:
 
     def _ensure_directories(self):
         """Cria diretórios necessários."""
-        for path in [self.config.output_path, self.config.processed_path, self.config.failed_path]:
+        for path in [self.config.output_path, self.config.processed_path, self.config.failed_path, self.config.working_dir]:
             Path(path).mkdir(parents=True, exist_ok=True)
         if self.config.local_queue_enabled:
             Path(self.config.local_queue_path).mkdir(parents=True, exist_ok=True)
@@ -187,7 +192,7 @@ class SQSWorker:
                 region_name=self.config.aws_region,
                 aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
                 aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
-                endpoint_url=os.getenv("SQS_ENDPOINT_URL"),  # Para LocalStack
+                endpoint_url=self.config.aws_endpoint_url,
             )
         return self.sqs_client
 
@@ -201,6 +206,11 @@ class SQSWorker:
         if self.config.local_queue_enabled:
             if self._local_queue:
                 return self._local_queue.pop(0), "local"
+            return None
+
+        if not self.config.sqs_queue_url:
+            logger.error("SQS_QUEUE_URL não configurado")
+            time.sleep(5)
             return None
 
         try:
@@ -253,7 +263,7 @@ class SQSWorker:
         Returns:
             Path do arquivo baixado ou None se falhou.
         """
-        input_path = Path(self.config.output_path) / f"input_{job.job_id}"
+        input_path = Path(self.config.working_dir) / f"input_{job.job_id}"
 
         if job.input_uri.startswith("s3://"):
             # Download do S3
@@ -310,7 +320,22 @@ class SQSWorker:
 
         # Para filesystem local, os arquivos já estão no lugar certo
 
-    def _update_api_progress(self, job: JobMessage, progress: int, total: int, status: str = "running"):
+    def _finalize_original(self, job: JobMessage, success: bool):
+        if not job.input_uri.startswith("file://"):
+            return
+        src = Path(job.input_uri.replace("file://", ""))
+        dest_root = Path(self.config.processed_path if success else self.config.failed_path)
+        dest_root.mkdir(parents=True, exist_ok=True)
+        if not src.exists():
+            return
+        suffix = "completed" if success else "failed"
+        dest = dest_root / f"{Path(job.filename).stem}_{suffix}_{int(time.time())}{src.suffix}"
+        try:
+            shutil.move(src, dest)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Falha ao mover arquivo original %s: %s", src, exc)
+
+    def _update_api_progress(self, job: JobMessage, progress: int, total: int, status: str = "running", error_message: str | None = None):
         """Atualiza progresso do job na API."""
         try:
             url = f"{self.config.api_url}/jobs/{job.job_id}/progress"
@@ -319,7 +344,11 @@ class SQSWorker:
                 "frames_total": total,
                 "status": status,
             }
-            requests.patch(url, json=data, timeout=5)
+            if error_message:
+                data["error_message"] = error_message
+            resp = requests.patch(url, json=data, timeout=5)
+            if resp.status_code >= 400:
+                logger.warning("API retornou %s ao atualizar job %s: %s", resp.status_code, job.job_id, resp.text)
         except requests.RequestException as e:
             logger.debug(f"Erro ao atualizar API (não crítico): {e}")
 
@@ -331,7 +360,10 @@ class SQSWorker:
             True se bem succeeded, False se falhou.
         """
         job_name = Path(job.filename).stem
-        output_dir = Path(self.config.output_path) / f"{job.project}_{job.variation}_{job_name}_{job.job_id[:8]}"
+        if job.output_uri.startswith("file://"):
+            output_dir = Path(job.output_uri.replace("file://", ""))
+        else:
+            output_dir = Path(self.config.output_path) / f"{job.project}_{job.variation}_{job_name}_{job.job_id[:8]}"
         output_dir.mkdir(parents=True, exist_ok=True)
 
         # Download input
@@ -352,6 +384,9 @@ class SQSWorker:
                 "-x", "1",
                 "-a",
                 "-t", str(self.config.max_concurrent_frames),
+                "--",
+                "--cycles-device",
+                self.config.render_device,
             ]
 
             logger.info(f"Iniciando render: {' '.join(blender_args)}")
@@ -368,15 +403,19 @@ class SQSWorker:
                 # Sucesso
                 self._upload_output(job, output_dir)
                 self._update_api_progress(job, 100, 100, "completed")
+                self._finalize_original(job, True)
                 return True
             else:
                 logger.error(f"Blender falhou: {result.stderr}")
-                self._update_api_progress(job, 0, 100, "failed")
+                err = result.stderr.strip() or "Blender retornou código diferente de zero"
+                self._update_api_progress(job, 0, 100, "failed", error_message=err[:200])
+                self._finalize_original(job, False)
                 return False
 
         except Exception as e:
             logger.error(f"Erro ao processar job {job.job_id}: {e}")
-            self._update_api_progress(job, 0, 100, "failed")
+            self._update_api_progress(job, 0, 100, "failed", error_message=str(e)[:200])
+            self._finalize_original(job, False)
             return False
 
         finally:
@@ -472,13 +511,16 @@ def main():
         sqs_queue_url=os.getenv("SQS_QUEUE_URL"),
         sqs_dlq_url=os.getenv("SQS_DLQ_URL"),
         aws_region=os.getenv("AWS_REGION", "us-east-1"),
+        aws_endpoint_url=os.getenv("AWS_ENDPOINT_URL"),
         output_path=os.getenv("OUTPUT_PATH", "/mnt/assets/output"),
         processed_path=os.getenv("PROCESSED_PATH", "/mnt/assets/completed"),
         failed_path=os.getenv("FAILED_PATH", "/mnt/assets/failed"),
         blender_path=os.getenv("BLENDER_PATH", "/opt/blender/blender"),
         max_concurrent_frames=int(os.getenv("MAX_CONCURRENT_FRAMES", "1")),
+        render_device=os.getenv("BLENDER_RENDER_DEVICE", "CPU").upper(),
         api_url=os.getenv("API_URL", "http://localhost:8080"),
         metrics_port=int(os.getenv("METRICS_PORT", "9100")),
+        working_dir=os.getenv("WORKER_TEMP_DIR", "/tmp/spot-render-worker"),
         local_queue_enabled=os.getenv("LOCAL_QUEUE_ENABLED", "false").lower() == "true",
         local_queue_path=os.getenv("QUEUE_PATH", "/mnt/assets/queue"),
     )
