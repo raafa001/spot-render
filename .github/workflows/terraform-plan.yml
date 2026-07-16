@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - infra/terraform/**
+      - policy/terraform/**
       - .github/workflows/terraform-plan.yml
   workflow_dispatch:
   schedule:
@@ -16,6 +17,9 @@ permissions:
 
 env:
   AWS_REGION: us-east-1
+  TF_IN_AUTOMATION: 'true'
+  TF_BACKEND_BUCKET: ${{ vars.TF_STATE_BUCKET != '' && vars.TF_STATE_BUCKET || 'spot-render-terraform-state' }}
+  TF_BACKEND_KEY: global/terraform.tfstate
 
 jobs:
   plan:
@@ -24,41 +28,90 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Configure AWS credentials
-        if: github.event_name != 'pull_request'
+      - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          role-to-assume: ${{ secrets.AWS_TERRAFORM_ROLE_ARN || secrets.AWS_DEPLOY_ROLE_ARN }}
+          role-session-name: terraformPlan
           aws-region: ${{ env.AWS_REGION }}
+        continue-on-error: true
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v4
         with:
           terraform_version: 1.9.0
 
-      - name: Terraform fmt (report only)
+      - name: Setup TFLint
+        uses: terraform-linters/setup-tflint@v4
+        with:
+          tflint_version: v0.53.0
+
+      - name: Cache Terraform providers
+        uses: actions/cache@v4
+        with:
+          path: infra/terraform/.terraform
+          key: terraform-${{ runner.os }}-${{ hashFiles('infra/terraform/.terraform.lock.hcl', 'infra/terraform/**/*.tf') }}
+          restore-keys: |
+            terraform-${{ runner.os }}-
+
+      - name: Terraform fmt
         working-directory: infra/terraform
         run: terraform fmt -check -recursive
-        continue-on-error: true
 
       - name: Terraform init
         working-directory: infra/terraform
-        run: terraform init
+        run: terraform init -backend-config="bucket=${{ env.TF_BACKEND_BUCKET }}" -backend-config="key=${{ env.TF_BACKEND_KEY }}" -backend-config="region=${{ env.AWS_REGION }}"
+        continue-on-error: true
+
+      - name: Terraform validate
+        working-directory: infra/terraform
+        run: terraform validate
+
+      - name: TFLint
+        working-directory: infra/terraform
+        run: tflint --config .tflint.hcl
+
+      - name: Install Checkov
+        run: |
+          python -m pip install --upgrade pip
+          pip install "checkov==3.2.319"
+
+      - name: Checkov (Terraform)
+        working-directory: infra/terraform
+        run: checkov -d . --framework terraform --quiet
 
       - name: Terraform plan
         id: plan
         working-directory: infra/terraform
-        run: terraform plan -out=tfplan
+        run: terraform plan -input=false -out=tfplan.binary -no-color
+
+      - name: Render plan as JSON
+        working-directory: infra/terraform
+        run: terraform show -json tfplan.binary > tfplan.json
+
+      - name: Install Conftest
+        run: |
+          mkdir -p "$HOME/bin"
+          curl -sSL https://github.com/open-policy-agent/conftest/releases/download/v0.53.0/conftest_Linux_x86_64.tar.gz -o /tmp/conftest.tar.gz
+          tar -xzf /tmp/conftest.tar.gz -C /tmp
+          mv /tmp/conftest "$HOME/bin/conftest"
+          chmod +x "$HOME/bin/conftest"
+          echo "$HOME/bin" >> "$GITHUB_PATH"
+
+      - name: Conftest (OPA policies)
+        working-directory: infra/terraform
+        run: conftest test tfplan.json --policy ../../policy/terraform
 
       - name: Upload plan artifact
         uses: actions/upload-artifact@v4
         with:
           name: terraform-plan
-          path: infra/terraform/tfplan
+          path: |
+            infra/terraform/tfplan.binary
+            infra/terraform/tfplan.json
 
       - name: Summarize plan
         working-directory: infra/terraform
         run: |
           echo "## Terraform Plan (infra/terraform)" >> $GITHUB_STEP_SUMMARY
-          terraform show tfplan >> $GITHUB_STEP_SUMMARY
+          terraform show tfplan.binary >> $GITHUB_STEP_SUMMARY

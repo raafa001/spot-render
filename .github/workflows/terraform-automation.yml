@@ -47,7 +47,8 @@ jobs:
       command: plan
       pr-number: ${{ github.event.pull_request.number || 0 }}
       ref: ${{ github.event.pull_request.head.sha || github.sha }}
-    secrets: inherit
+    secrets:
+      AWS_DEPLOY_ROLE_ARN: ${{ secrets.AWS_DEPLOY_ROLE_ARN || secrets.AWS_TERRAFORM_ROLE_ARN || 'not-configured' }}
 
   comment-plan:
     if: >
@@ -60,7 +61,8 @@ jobs:
       command: plan
       pr-number: ${{ github.event.issue.number }}
       ref: refs/pull/${{ github.event.issue.number }}/head
-    secrets: inherit
+    secrets:
+      AWS_DEPLOY_ROLE_ARN: ${{ secrets.AWS_DEPLOY_ROLE_ARN || secrets.AWS_TERRAFORM_ROLE_ARN || 'not-configured' }}
 
   comment-apply-destroy:
     if: >

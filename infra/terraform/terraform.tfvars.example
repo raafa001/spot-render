@@ -20,6 +20,5 @@ database_name     = "renderqueue"
 database_username = "render_admin"
 database_password = "mude-me"
 
-# Backend remoto - atualize antes do primeiro terraform init no ambiente remoto
-tf_state_bucket      = "spot-render-terraform-state"
-tf_state_lock_table  = "spot-render-terraform-lock"
+# Backend remoto - bucket criado em infra/terraform/bootstrap
+tf_state_bucket = "spot-render-terraform-state"
