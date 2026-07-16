@@ -67,11 +67,13 @@ COPY --from=blender /opt/blender /opt/blender
 COPY workers/blender-runner/entrypoint.sh /usr/local/bin/entrypoint.sh
 COPY workers/blender-runner/worker-sqs.py /usr/local/bin/worker-sqs.py
 COPY workers/blender-runner/converters/ /usr/local/bin/converters/
+COPY workers/blender-runner/maxscript/ /usr/local/bin/maxscript/
 
 # Garante permissões de execução
 RUN chmod +x /usr/local/bin/entrypoint.sh \
     /usr/local/bin/worker-sqs.py \
-    /usr/local/bin/converters/*.py
+    /usr/local/bin/converters/*.py \
+    /usr/local/bin/maxscript/*.py
 
 # Instala dependências Python
 RUN pip3 install --no-cache-dir \
@@ -79,7 +81,7 @@ RUN pip3 install --no-cache-dir \
     numpy pillow
 
 # Garante que diretórios críticos existem e têm permissões
-RUN mkdir -p /mnt/assets/queue /mnt/assets/output /mnt/assets/processed /mnt/assets/failed /tmp \
+RUN mkdir -p /mnt/assets/queue /mnt/assets/input /mnt/assets/renderlists /mnt/assets/output /mnt/assets/processed /mnt/assets/failed /tmp \
     && chmod -R 0777 /mnt/assets /tmp
 
 # Volume para Assets

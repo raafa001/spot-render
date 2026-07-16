@@ -4,117 +4,42 @@ set -euo pipefail
 # =============================================================================
 # Spot Render - Blender Worker Entrypoint
 #
-# Worker que processa arquivos 3D (.blend, .ms, .max, .fbx, .obj, etc)
-# e os renderiza usando Blender.
+# Worker que processa arquivos 3D e MAXScripts (.ms) e os renderiza no Blender.
 #
-# Suporta:
-# - Arquivos .blend (direto)
-# - Arquivos Maya (.ms, .ma) - conversão para .blend via Blender
-# - Arquivos 3ds Max (.max) - conversão para .blend via Blender
-# - Formatos interop (.fbx, .obj, .gltf, .3ds) - conversão via Blender
+# Fluxo suportado:
+# 1. Arquivos .blend (direto)
+# 2. MAXScript .ms + renderlist .xlsx (processa e cria cena no Blender)
+# 3. Outros formatos 3D (.fbx, .obj, .gltf) - conversão via Blender
 # =============================================================================
 
 WORKER_MODE=${WORKER_MODE:-filesystem}
 QUEUE_PATH=${QUEUE_PATH:-/mnt/assets/queue}
+INPUT_PATH=${INPUT_PATH:-/mnt/assets/input}
 OUTPUT_PATH=${OUTPUT_PATH:-/mnt/assets/output}
 PROCESSED_PATH=${PROCESSED_PATH:-/mnt/assets/processed}
 FAILED_PATH=${FAILED_PATH:-/mnt/assets/failed}
 CONVERTED_PATH=/tmp/converted
+RENDERLIST_PATH=${RENDERLIST_PATH:-/mnt/assets/renderlists}
 MAX_CONCURRENT_FRAMES=${MAX_CONCURRENT_FRAMES:-1}
 LOG_LEVEL=${LOG_LEVEL:-INFO}
 POLL_INTERVAL_SECONDS=${POLL_INTERVAL_SECONDS:-30}
 METRICS_PORT=${METRICS_PORT:-9100}
 BLENDER_PATH=${BLENDER_PATH:-/opt/blender/blender}
+MAXSCRIPT_PROCESSOR=/usr/local/bin/maxscript/processor.py
 CONVERTER_SCRIPT=/usr/local/bin/converters/convert.py
 METRICS_FILE=/tmp/worker_metrics.prom
 READY_FILE=/tmp/worker.ready
 
-# Extensões suportadas para conversão
-SUPPORTED_EXTENSIONS="\.blend$|\.ms$|\.ma$|\.mb$|\.max$|\.fbx$|\.obj$|\.gltf$|\.glb$|\.3ds$"
-
 # Cria diretórios necessários
-mkdir -p "${QUEUE_PATH}" "${OUTPUT_PATH}" "${PROCESSED_PATH}" "${FAILED_PATH}" "${CONVERTED_PATH}"
+mkdir -p "${QUEUE_PATH}" "${INPUT_PATH}" "${OUTPUT_PATH}" "${PROCESSED_PATH}" "${FAILED_PATH}" "${CONVERTED_PATH}" "${RENDERLIST_PATH}"
 
-# Garante permissões corretas (0777 para compartilhamento entre containers)
-chmod -R 0777 "${QUEUE_PATH}" "${OUTPUT_PATH}" "${PROCESSED_PATH}" "${FAILED_PATH}" 2>/dev/null || true
+# Garante permissões corretas
+chmod -R 0777 "${QUEUE_PATH}" "${INPUT_PATH}" "${OUTPUT_PATH}" "${PROCESSED_PATH}" "${FAILED_PATH}" 2>/dev/null || true
 
 touch "${METRICS_FILE}" "${READY_FILE}"
 
 log() {
   printf '[%s] %s\n' "$(date --iso-8601=seconds)" "$*" >&2
-}
-
-# Verifica se arquivo precisa de conversão
-needs_conversion() {
-  local file=$1
-  local ext="${file##*.}"
-  ext=$(echo "$ext" | tr '[:upper:]' '[:lower:]')
-
-  # Se não for .blend, precisa converter
-  if [[ "$ext" != "blend" ]]; then
-    return 0
-  fi
-  return 1
-}
-
-# Converte arquivo para .blend usando Python converter
-convert_file() {
-  local input_file=$1
-  local output_file=$2
-
-  log "Convertendo ${input_file} -> ${output_file}"
-
-  if python3 "${CONVERTER_SCRIPT}" "${input_file}" "${output_file}"; then
-    log "Conversão concluída: ${output_file}"
-    return 0
-  else
-    log "ERRO: Falha na conversão de ${input_file}"
-    return 1
-  fi
-}
-
-# Executa renderização Blender
-render_file() {
-  local blend_file=$1
-  local output_dir=$2
-
-  log "Renderizando ${blend_file} -> ${output_dir}"
-
-  # Verifica se Blender existe
-  if [[ ! -x "${BLENDER_PATH}" ]]; then
-    log "ERRO: Blender não encontrado em ${BLENDER_PATH}"
-    return 1
-  fi
-
-  # Executa Blender em background
-  if "${BLENDER_PATH}" -b "${blend_file}" \
-     -o "${output_dir}/frame_#####" \
-     -F PNG \
-     -x 1 \
-     -a \
-     -t "${MAX_CONCURRENT_FRAMES}" \
-     -- --cycles-device CPU \
-     --log-file /tmp/blender.log 2>&1; then
-    log "Renderização concluída"
-    return 0
-  else
-    log "ERRO: Blender falhou"
-    return 1
-  fi
-}
-
-# Move arquivo para diretório de processados
-move_to_processed() {
-  local file=$1
-  local dest="${PROCESSED_PATH}/$(basename "$file")"
-  mv "$file" "$dest" 2>/dev/null && log "Movido para: $dest" || log "Aviso: não foi possível mover para $dest"
-}
-
-# Move arquivo para diretório de falhados
-move_to_failed() {
-  local file=$1
-  local dest="${FAILED_PATH}/$(basename "$file")-$(date +%s)"
-  mv "$file" "$dest" 2>/dev/null && log "Movido para failed: $dest" || log "Aviso: não foi possível mover para $dest"
 }
 
 # Atualiza métricas Prometheus
@@ -147,7 +72,6 @@ import sys
 METRICS_FILE = sys.argv[1]
 PORT = int(sys.argv[2])
 
-
 class Handler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path not in ('/metrics', '/metrics/'):
@@ -168,7 +92,6 @@ class Handler(http.server.BaseHTTPRequestHandler):
     def log_message(self, format, *args):
         return
 
-
 http.server.ThreadingHTTPServer(('', PORT), Handler).serve_forever()
 PY
   METRICS_PID=$!
@@ -182,6 +105,102 @@ cleanup() {
 
 trap cleanup EXIT
 
+# Encontra renderlist correspondente
+find_renderlist() {
+  local input_file=$1
+  local base_name=$(basename "$input_file" .ms)
+
+  # Procura renderlist no mesmo diretório ou no dir de renderlists
+  for ext in xlsx xls; do
+    # No dir de input
+    if [[ -f "${INPUT_PATH}"/*/"${base_name}.${ext}" ]]; then
+      echo "${INPUT_PATH}"/*/"${base_name}.${ext}"
+      return 0
+    fi
+    # No dir de renderlists
+    if [[ -f "${RENDERLIST_PATH}"/*/"${base_name}.${ext}" ]]; then
+      echo "${RENDERLIST_PATH}"/*/"${base_name}.${ext}"
+      return 0
+    fi
+    # Qualquer xlsx no dir de renderlists
+    if [[ -f "${RENDERLIST_PATH}"/*.${ext} ]]; then
+      echo "${RENDERLIST_PATH}"/*.${ext}
+      return 0
+    fi
+  done
+  return 1
+}
+
+# Processa arquivo MAXScript com renderlist
+process_maxscript() {
+  local ms_file=$1
+  local output_dir=$2
+
+  log "Processando MAXScript: ${ms_file}"
+
+  # Procura renderlist
+  local renderlist=""
+  if [[ -d "${INPUT_PATH}" ]] || [[ -d "${RENDERLIST_PATH}" ]]; then
+    renderlist=$(find_renderlist "$ms_file")
+  fi
+
+  if [[ -n "$renderlist" ]]; then
+    log "Renderlist encontrada: ${renderlist}"
+  else
+    log "Aviso: Nenhuma renderlist encontrada para ${ms_file}"
+    log "Criando cena padrão..."
+    renderlist="none"
+  fi
+
+  # Executa processador de MAXScript
+  if python3 "${MAXSCRIPT_PROCESSOR}" "$ms_file" "$renderlist" "$output_dir"; then
+    log "MAXScript processado com sucesso"
+    return 0
+  else
+    log "ERRO: Falha no processamento do MAXScript"
+    return 1
+  fi
+}
+
+# Renderiza cena criada
+render_blender_scene() {
+  local output_dir=$1
+  local job_name=$2
+
+  log "Renderizando cena: ${output_dir}"
+
+  # Usa Blender para renderizar a cena atual
+  local output_file="${output_dir}/${job_name}_####"
+
+  if "${BLENDER_PATH}" -b \
+     -o "${output_file}" \
+     -F PNG \
+     -x 1 \
+     -a \
+     -t "${MAX_CONCURRENT_FRAMES}" \
+     -- --cycles-device CPU; then
+    log "Renderização concluída"
+    return 0
+  else
+    log "ERRO: Blender falhou"
+    return 1
+  fi
+}
+
+# Move arquivo para processados
+move_to_processed() {
+  local file=$1
+  local dest="${PROCESSED_PATH}/$(basename "$file")"
+  mv "$file" "$dest" 2>/dev/null && log "Movido para: $dest" || log "Aviso: não foi possível mover"
+}
+
+# Move arquivo para falhados
+move_to_failed() {
+  local file=$1
+  local dest="${FAILED_PATH}/$(basename "$file")-$(date +%s)"
+  mv "$file" "$dest" 2>/dev/null && log "Movido para failed: $dest" || log "Aviso: não foi possível mover"
+}
+
 # Modo SQS (usa worker Python)
 if [[ "${WORKER_MODE}" == "sqs" ]]; then
   log "Worker iniciado em modo SQS"
@@ -194,15 +213,30 @@ frames_rendered=0
 last_success_ts=0
 update_metrics 0 0 0
 
-log "Blender worker iniciado. Aguardando arquivos em ${QUEUE_PATH}"
-log "Converter: ${CONVERTER_SCRIPT}"
+log "Blender worker iniciado"
+log "Queue: ${QUEUE_PATH}"
+log "Input: ${INPUT_PATH}"
+log "Output: ${OUTPUT_PATH}"
+log "MAXScript Processor: ${MAXSCRIPT_PROCESSOR}"
 log "Blender: ${BLENDER_PATH}"
 
 while true; do
   touch "${READY_FILE}"
 
-  # Procura arquivos na fila (suporta múltiplas extensões)
-  mapfile -t queue_files < <(find "${QUEUE_PATH}" -maxdepth 1 -type f \( -name '*.blend' -o -name '*.ms' -o -name '*.ma' -o -name '*.mb' -o -name '*.max' -o -name '*.fbx' -o -name '*.obj' -o -name '*.gltf' -o -name '*.glb' \) 2>/dev/null | sort)
+  # Procura arquivos na fila
+  # Para MAXScript, procura .ms e对应的 xlsx
+  mapfile -t queue_files < <(find "${QUEUE_PATH}" -maxdepth 1 -type f -name '*.ms' 2>/dev/null | sort)
+
+  # Também procura arquivos directos na input
+  if [[ -d "${INPUT_PATH}" ]]; then
+    mapfile -t input_files < <(find "${INPUT_PATH}" -maxdepth 3 -type f \( -name '*.ms' -o -name '*.blend' \) 2>/dev/null | sort)
+    # Combina arrays (evita duplicatas)
+    for f in "${input_files[@]}"; do
+      if [[ ! " ${queue_files[*]} " =~ " ${f} " ]]; then
+        queue_files+=("$f")
+      fi
+    done
+  fi
 
   queue_depth=${#queue_files[@]}
   if (( queue_depth == 0 )); then
@@ -215,7 +249,6 @@ while true; do
   job_name=$(basename "${job_path}")
   job_stem="${job_name%.*}"
   job_output_dir="${OUTPUT_PATH}/${job_stem}"
-  job_basename="${job_name%.*}"  # nome sem extensão
 
   mkdir -p "${job_output_dir}"
   chmod 0777 "${job_output_dir}"
@@ -226,49 +259,70 @@ while true; do
     remaining_depth=0
   fi
 
-  log "Processando ${job_path}"
+  log "Processando: ${job_path}"
 
-  # Verifica se precisa converter
-  converted_file=""
-  if [[ "${job_name,,}" == *.blend ]]; then
-    # Já é .blend, usa direto
-    render_input="${job_path}"
-  else
-    # Precisa converter
-    converted_file="${CONVERTED_PATH}/${job_basename}.blend"
-    if convert_file "${job_path}" "${converted_file}"; then
-      render_input="${converted_file}"
+  # Verifica extensão
+  ext="${job_name##*.}"
+  ext=$(echo "$ext" | tr '[:upper:]' '[:lower:]')
+
+  if [[ "$ext" == "ms" ]]; then
+    # Processa MAXScript
+    if process_maxscript "${job_path}" "${job_output_dir}"; then
+      frames_rendered=$((frames_rendered + 1))
+      last_success_ts=$(date +%s)
+      update_metrics "${frames_rendered}" "${remaining_depth}" "${last_success_ts}"
+      log "Job ${job_name} concluído"
+      move_to_processed "${job_path}"
     else
-      log "Falha na conversão, movendo para failed: ${job_path}"
+      log "Falha no job ${job_name}"
       move_to_failed "${job_path}"
       update_metrics "${frames_rendered}" "${remaining_depth}" "${last_success_ts}"
-      continue
     fi
-  fi
 
-  # Renderiza
-  if render_file "${render_input}" "${job_output_dir}"; then
-    frames_rendered=$((frames_rendered + 1))
-    last_success_ts=$(date +%s)
+  elif [[ "$ext" == "blend" ]]; then
+    # Renderiza .blend direto
+    if "${BLENDER_PATH}" -b "${job_path}" \
+       -o "${job_output_dir}/frame_#####" \
+       -F PNG \
+       -x 1 \
+       -a \
+       -t "${MAX_CONCURRENT_FRAMES}" \
+       -- --cycles-device CPU; then
+      frames_rendered=$((frames_rendered + 1))
+      last_success_ts=$(date +%s)
+      log "Job ${job_name} concluído"
+      move_to_processed "${job_path}"
+    else
+      log "Falha no job ${job_name}"
+      move_to_failed "${job_path}"
+    fi
     update_metrics "${frames_rendered}" "${remaining_depth}" "${last_success_ts}"
-    log "Job ${job_name} concluído com sucesso"
 
-    # Move original para processados
-    move_to_processed "${job_path}"
-
-    # Se converteu, limpa arquivo convertido
-    if [[ -n "${converted_file}" && -f "${converted_file}" ]]; then
-      rm -f "${converted_file}"
-    fi
   else
-    log "Falha ao renderizar ${job_name}"
-    move_to_failed "${job_path}"
-
-    # Se converteu, limpa arquivo convertido
-    if [[ -n "${converted_file}" && -f "${converted_file}" ]]; then
-      rm -f "${converted_file}"
+    # Outros formatos - tenta converter
+    converted_file="${CONVERTED_PATH}/${job_stem}.blend"
+    if python3 "${CONVERTER_SCRIPT}" "${job_path}" "${converted_file}"; then
+      # Renderiza arquivo convertido
+      if "${BLENDER_PATH}" -b "${converted_file}" \
+         -o "${job_output_dir}/frame_#####" \
+         -F PNG \
+         -x 1 \
+         -a \
+         -t "${MAX_CONCURRENT_FRAMES}" \
+         -- --cycles-device CPU; then
+        frames_rendered=$((frames_rendered + 1))
+        last_success_ts=$(date +%s)
+        log "Job ${job_name} concluído"
+        move_to_processed "${job_path}"
+      else
+        log "Falha no job ${job_name}"
+        move_to_failed "${job_path}"
+      fi
+    else
+      log "Não foi possível converter ${job_name}"
+      move_to_failed "${job_path}"
     fi
-
+    rm -f "${converted_file}" 2>/dev/null || true
     update_metrics "${frames_rendered}" "${remaining_depth}" "${last_success_ts}"
   fi
 done
