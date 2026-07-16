@@ -365,6 +365,7 @@ class SQSWorker:
         else:
             output_dir = Path(self.config.output_path) / f"{job.project}_{job.variation}_{job_name}_{job.job_id[:8]}"
         output_dir.mkdir(parents=True, exist_ok=True)
+        output_dir.chmod(0o777)
 
         # Download input
         input_file = self._download_input(job)

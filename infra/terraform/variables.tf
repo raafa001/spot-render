@@ -315,12 +315,6 @@ variable "tf_state_bucket" {
   default     = "spot-render-terraform-state"
 }
 
-variable "tf_state_lock_table" {
-  description = "Nome da tabela DynamoDB usada como lock do state"
-  type        = string
-  default     = "spot-render-terraform-lock"
-}
-
 # ─── AWS Credentials (para Terraform Cloud/AGENT) ─────────────────────────────
 
 variable "aws_profile" {

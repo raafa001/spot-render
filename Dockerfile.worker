@@ -24,12 +24,12 @@ FROM ${CUDA_IMAGE}
 
 ENV NVIDIA_VISIBLE_DEVICES=all \
     NVIDIA_DRIVER_CAPABILITIES=compute,utility \
-    BLENDER_PATH=/opt/blender \
+    BLENDER_PATH=/opt/blender/blender \
     PATH=/opt/blender:$PATH
 
 # hadolint ignore=DL3008
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends python3 python3-pip procps \
+    && apt-get install -y --no-install-recommends python3 python3-pip procps libx11-6 libglu1-mesa libxi6 libxrender1 libxkbcommon0 \
     && rm -rf /var/lib/apt/lists/*
 
 RUN groupadd -r render -g 1001 && useradd -r -g render -u 1001 render

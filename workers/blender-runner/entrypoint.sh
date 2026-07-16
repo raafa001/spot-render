@@ -110,6 +110,8 @@ while true; do
   job_name=$(basename "${job_path}" .blend)
   job_output_dir="${OUTPUT_PATH}/${job_name}"
   mkdir -p "${job_output_dir}"
+  chmod 0777 "${job_output_dir}"
+  chmod 0777 "${job_output_dir}"
   if (( queue_depth > 0 )); then
     remaining_depth=$((queue_depth - 1))
   else
