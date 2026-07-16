@@ -5,7 +5,7 @@ resources:
   - ../../base
   - storageclass-efs.yaml
 patches:
-  - patch-ingress.yaml
+  - path: patch-ingress.yaml
 images:
   - name: ghcr.io/company/spot-render-api
     newName: 123456789012.dkr.ecr.us-east-1.amazonaws.com/spot-render-api

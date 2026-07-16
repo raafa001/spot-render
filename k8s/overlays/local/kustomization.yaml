@@ -6,9 +6,7 @@ resources:
   - storageclass-local.yaml
   - pv-local.yaml
 patches:
-  - patch-configmap.yaml
-images:
-@@
+  - path: patch-configmap.yaml
 images:
   - name: ghcr.io/company/spot-render-api
     newName: local/spot-render-api
