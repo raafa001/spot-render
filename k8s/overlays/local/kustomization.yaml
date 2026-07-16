@@ -5,7 +5,7 @@ resources:
   - ../../base
   - storageclass-local.yaml
   - pv-local.yaml
-patchesStrategicMerge:
+patches:
   - patch-configmap.yaml
 images:
 @@

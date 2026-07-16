@@ -4,7 +4,7 @@ namespace: rendering
 resources:
   - ../../base
   - storageclass-efs.yaml
-patchesStrategicMerge:
+patches:
   - patch-ingress.yaml
 images:
   - name: ghcr.io/company/spot-render-api
