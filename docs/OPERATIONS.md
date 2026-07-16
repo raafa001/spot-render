@@ -74,16 +74,21 @@ kind load docker-image local/spot-render-worker:dev
 
 ### Passo 3: Provisionar AWS com Terraform / Provision AWS via Terraform
 
-> **PT-BR:** Atualize `terraform.tfvars`, inicialize o backend remoto (S3+DynamoDB) e aplique os módulos.
+> **PT-BR:** Execute primeiro `infra/terraform/bootstrap` para criar o bucket de state com Object Lock + MFA e depois inicialize `infra/terraform` apontando para esse bucket.
 >
-> **EN:** Update `terraform.tfvars`, initialize the remote backend (S3 + DynamoDB), and apply the modules.
+> **EN:** Run `infra/terraform/bootstrap` first to create the Object Lock + MFA state bucket, then initialize `infra/terraform` pointing to it.
 
 ```bash
-cd infra/terraform
+# 3.1 - Bootstrap do backend
+cd infra/terraform/bootstrap
+terraform init && terraform apply -var "bucket_name=spot-render-terraform-state"
+
+# 3.2 - Stack principal
+cd ../
 cp terraform.tfvars.example terraform.tfvars
 terraform init \
   -backend-config="bucket=spot-render-terraform-state" \
-  -backend-config="dynamodb_table=spot-render-terraform-lock" \
+  -backend-config="key=global/terraform.tfstate" \
   -backend-config="region=us-east-1"
 
 terraform apply -var "environment=prd" -var "enable_aws=true"

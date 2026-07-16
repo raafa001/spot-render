@@ -50,32 +50,32 @@ module "database" {
   environment = var.environment
 
   # Configuração do Aurora Serverless v2
-  engine_version         = var.database_engine_version
-  db_name               = var.database_name
-  username              = var.database_username
-  password              = var.database_password
+  engine_version = var.database_engine_version
+  db_name        = var.database_name
+  username       = var.database_username
+  password       = var.database_password
 
   # Rede
-  vpc_id                 = module.network.vpc_id
-  vpc_cidr               = var.vpc_cidr
-  subnet_ids             = module.network.private_subnet_ids
+  vpc_id     = module.network.vpc_id
+  vpc_cidr   = var.vpc_cidr
+  subnet_ids = module.network.private_subnet_ids
 
   # Serverless v2
   serverless_min_capacity = var.serverless_min_capacity
   serverless_max_capacity = var.serverless_max_capacity
 
   # HA e Replicação
-  enable_read_replicas   = var.enable_read_replicas
-  num_read_replicas      = var.num_read_replicas
-  enable_global_db       = var.enable_global_db
+  enable_read_replicas = var.enable_read_replicas
+  num_read_replicas    = var.num_read_replicas
+  enable_global_db     = var.enable_global_db
 
   # Backup
-  backup_retention_days  = var.backup_retention_days
-  deletion_protection     = var.enable_aws ? true : false # Sempre true em produção
+  backup_retention_days = var.backup_retention_days
+  deletion_protection   = var.enable_aws ? true : false # Sempre true em produção
 
   # Monitoring
-  enable_monitoring       = var.enable_monitoring
-  alert_topic_arns       = var.alert_topic_arns
+  enable_monitoring = var.enable_monitoring
+  alert_topic_arns  = var.alert_topic_arns
 }
 
 # ─── Amazon SQS (Job Queue + DLQ) ─────────────────────────────────────────────
@@ -83,10 +83,10 @@ module "database" {
 module "messaging" {
   source = "./modules/messaging"
 
-  environment                  = var.environment
-  prefix                       = var.prefix
-  queue_depth_alarm_threshold   = var.queue_depth_alarm_threshold
-  alert_topic_arns             = var.alert_topic_arns
+  environment                 = var.environment
+  prefix                      = var.prefix
+  queue_depth_alarm_threshold = var.queue_depth_alarm_threshold
+  alert_topic_arns            = var.alert_topic_arns
 }
 
 # ─── ElastiCache Redis ─────────────────────────────────────────────────────────
@@ -95,16 +95,16 @@ module "cache" {
   source = "./modules/cache"
 
   environment = var.environment
-  prefix     = var.prefix
+  prefix      = var.prefix
 
   vpc_id     = module.network.vpc_id
   vpc_cidr   = var.vpc_cidr
   subnet_ids = module.network.private_subnet_ids
 
-  node_type              = var.redis_node_type
-  num_cache_clusters     = var.redis_num_cache_clusters
-  engine_version         = var.redis_engine_version
-  auth_enabled           = var.enable_redis_auth
+  node_type               = var.redis_node_type
+  num_cache_clusters      = var.redis_num_cache_clusters
+  engine_version          = var.redis_engine_version
+  auth_enabled            = var.enable_redis_auth
   snapshot_retention_days = var.redis_snapshot_retention_days
 
   alert_topic_arns = var.alert_topic_arns
@@ -116,7 +116,7 @@ module "secrets" {
   source = "./modules/secrets"
 
   environment = var.environment
-  prefix     = var.prefix
+  prefix      = var.prefix
 
   kms_key_id = var.kms_key_id
 
@@ -140,10 +140,10 @@ module "monitoring" {
   source = "./modules/monitoring"
 
   environment = var.environment
-  prefix     = var.prefix
-  aws_region = var.aws_region
+  prefix      = var.prefix
+  aws_region  = var.aws_region
 
-  serverless_max_capacity = var.serverless_max_capacity
+  serverless_max_capacity   = var.serverless_max_capacity
   sqs_queue_depth_threshold = var.queue_depth_alarm_threshold
 
   alert_email = var.alert_email
@@ -164,10 +164,10 @@ output "network_summary" {
 output "eks_summary" {
   description = "Dados principais do cluster EKS"
   value = {
-    cluster_name    = module.eks.cluster_name
-    endpoint        = module.eks.cluster_endpoint
-    oidc_arn        = module.eks.oidc_provider_arn
-    nodegroup_arn   = module.eks.node_group_arn
+    cluster_name  = module.eks.cluster_name
+    endpoint      = module.eks.cluster_endpoint
+    oidc_arn      = module.eks.oidc_provider_arn
+    nodegroup_arn = module.eks.node_group_arn
   }
 }
 
@@ -206,7 +206,7 @@ output "secrets_summary" {
   description = "ARNs dos secrets no Secrets Manager"
   value = {
     database_secret_arn = module.secrets.database_secret_arn
-    redis_secret_arn   = module.secrets.redis_secret_arn
-    sqs_secret_arn     = module.secrets.sqs_secret_arn
+    redis_secret_arn    = module.secrets.redis_secret_arn
+    sqs_secret_arn      = module.secrets.sqs_secret_arn
   }
 }

@@ -15,6 +15,9 @@ permissions:
 
 env:
   AWS_REGION: us-east-1
+  TF_BACKEND_BUCKET: ${{ vars.TF_STATE_BUCKET != '' && vars.TF_STATE_BUCKET || 'spot-render-terraform-state' }}
+  TF_BACKEND_KEY: global/terraform.tfstate
+  TF_IN_AUTOMATION: 'true'
 
 jobs:
   apply:
@@ -25,23 +28,49 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Configure AWS credentials
+      - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          role-session-name: terraformApply
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
+        uses: hashicorp/setup-terraform@v4
         with:
           terraform_version: 1.9.0
 
+      - name: Setup TFLint
+        uses: terraform-linters/setup-tflint@v4
+        with:
+          tflint_version: v0.53.0
+
+      - name: Cache Terraform providers
+        uses: actions/cache@v4
+        with:
+          path: infra/terraform/.terraform
+          key: terraform-${{ runner.os }}-${{ hashFiles('infra/terraform/.terraform.lock.hcl', 'infra/terraform/**/*.tf') }}
+          restore-keys: |
+            terraform-${{ runner.os }}-
+
+      - name: Terraform fmt
+        working-directory: infra/terraform
+        run: terraform fmt -check -recursive
+
       - name: Terraform init
         working-directory: infra/terraform
-        run: terraform init
+        run: terraform init -backend-config="bucket=${{ env.TF_BACKEND_BUCKET }}" -backend-config="key=${{ env.TF_BACKEND_KEY }}" -backend-config="region=${{ env.AWS_REGION }}"
+
+      - name: Terraform validate
+        working-directory: infra/terraform
+        run: terraform validate
+
+      - name: TFLint
+        working-directory: infra/terraform
+        run: tflint --config .tflint.hcl
 
       - name: Terraform apply
         working-directory: infra/terraform
         env:
           TF_VAR_environment: ${{ inputs.environment }}
-        run: terraform apply -auto-approve
+        run: terraform apply -input=false -auto-approve

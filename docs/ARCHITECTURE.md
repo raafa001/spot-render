@@ -13,13 +13,13 @@
 ## 2. Terraform
 
 > **PT-BR:**
-> - Estrutura padrão (`providers.tf`, `main.tf`, `variables.tf`, `outputs.tf`) com backend remoto S3 + DynamoDB (object lock, encryption). Comentários explicam como alternar para backend local (`backend.override.tf`).
+> - Estrutura padrão (`providers.tf`, `main.tf`, `variables.tf`, `outputs.tf`) com backend remoto S3 versionado + Object Lock (sem DynamoDB) e documentação para usar `backend.override.tf` em modo local.
 > - Módulo `network`: VPC / subnets públicas e privadas, NAT Gateway por AZ, Flow Logs com CloudWatch + IAM dedicado, SG específico do PostgreSQL.
 > - Módulo `eks`: Cluster 1.29, node group GPU (`g5.xlarge`), addons control-plane, IRSA + OIDC, papéis do Karpenter/Karpenter instance profile, regras `aws-auth` via Access Entries.
 > - Módulo `database`: RDS PostgreSQL Multi-AZ (monitoring/PI habilitados) ou StatefulSet local com PVC `local-path`, probes TCP/readiness, secreta gerada por Terraform.
 >
 > **EN:**
-> - Standard layout (`providers.tf`, `main.tf`, `variables.tf`, `outputs.tf`) with an S3 + DynamoDB remote backend (object lock, encryption). Comments describe how to switch to a local backend (`backend.override.tf`).
+> - Standard layout (`providers.tf`, `main.tf`, `variables.tf`, `outputs.tf`) with an Object-Lock-enabled S3 backend (no DynamoDB) and guidance on switching to a local backend via `backend.override.tf`.
 > - `network` module: VPC / public + private subnets, one NAT Gateway per AZ, Flow Logs with CloudWatch + dedicated IAM, PostgreSQL-specific SG.
 > - `eks` module: Kubernetes 1.29 cluster, GPU node group (`g5.xlarge`), control plane addons, IRSA + OIDC, Karpenter controller/instance profiles, and `aws-auth` entries managed via Access Entries.
 > - `database` module: Multi-AZ PostgreSQL RDS (monitoring/PI enabled) or a local StatefulSet using the `local-path` PVC, TCP/readiness probes, and secrets provisioned by Terraform.
