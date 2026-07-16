@@ -1,0 +1,57 @@
+name: AIOps Agents
+
+on:
+  workflow_dispatch:
+    inputs:
+      agent:
+        description: 'Agent to run'
+        required: true
+        default: 'security-scanner'
+        type: choice
+        options:
+          - security-scanner
+          - documenter
+          - monitor
+          - root-cause-analyzer
+          - alert-generator
+          - capacity-planner
+          - incident-responder
+  schedule:
+    # Run security scan weekly
+    - cron: '0 2 * * 0'
+
+env:
+  AIOPS_LLM_PROVIDER: ollama
+  AIOPS_LLM_MODEL: llama3.2
+
+jobs:
+  aiops-agent:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install -q -r agents/requirements.txt
+
+      - name: Run AIOps Agent
+        run: |
+          python -m agents.main \
+            --agent ${{ github.event.inputs.agent || 'security-scanner' }} \
+            --repo .
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+      - name: Upload security report
+        if: github.event.inputs.agent == 'security-scanner'
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-report
+          path: security-reports/*.json
+          retention-days: 30

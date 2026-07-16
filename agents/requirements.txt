@@ -1,0 +1,23 @@
+# AIOps Agents - spot-render
+
+# Core dependencies (free, open source)
+requests>=2.31.0
+boto3>=1.34.0
+
+# Optional: LiteLLM for unified LLM interface (remove if using direct API calls)
+# litellm>=1.0.0
+
+# Optional: Prophet for forecasting (installs pandas, numpy, cmdstanpy)
+# prophet>=1.1.0
+
+# Optional: Statistical anomaly detection
+# statsmodels>=0.14.0
+
+# Testing
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
+
+# Development
+ruff>=0.1.0
+black>=23.0.0
+mypy>=1.7.0
