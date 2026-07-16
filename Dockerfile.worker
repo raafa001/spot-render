@@ -74,7 +74,7 @@ RUN chmod +x /usr/local/bin/entrypoint.sh \
     /usr/local/bin/converters/*.py
 
 # Instala dependências Python
-RUN pip3 install --no-cache-dir --break-system-packages \
+RUN pip3 install --no-cache-dir \
     boto3 requests \
     numpy pillow
 

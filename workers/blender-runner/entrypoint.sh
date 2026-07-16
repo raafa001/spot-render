@@ -25,7 +25,7 @@ LOG_LEVEL=${LOG_LEVEL:-INFO}
 POLL_INTERVAL_SECONDS=${POLL_INTERVAL_SECONDS:-30}
 METRICS_PORT=${METRICS_PORT:-9100}
 BLENDER_PATH=${BLENDER_PATH:-/opt/blender/blender}
-CONVERTER_SCRIPT=/usr/local/bin/convert.py
+CONVERTER_SCRIPT=/usr/local/bin/converters/convert.py
 METRICS_FILE=/tmp/worker_metrics.prom
 READY_FILE=/tmp/worker.ready
 
