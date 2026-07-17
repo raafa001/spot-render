@@ -1,0 +1,64 @@
+{
+    "items": [
+        {
+            "short_name": "T1",
+            "camera_name": "Camera_01",
+            "layer_name": "SPOTLAR_OFERTA_T1",
+            "resolution": "1920x1080",
+            "filename": "T1_Camera01",
+            "render_type": "color",
+            "render_bool": true,
+            "preview_bool": false,
+            "folder_to_use": "T1",
+            "dest": "/storage/output"
+        },
+        {
+            "short_name": "T1_Sup",
+            "camera_name": "Camera_01",
+            "layer_name": "SPOTLAR_OFERTA_T1, (Sup) T1",
+            "resolution": "1920x1080",
+            "filename": "T1_Camera01_Sup",
+            "render_type": "color",
+            "render_bool": true,
+            "preview_bool": false,
+            "folder_to_use": "T1",
+            "dest": "/storage/output"
+        },
+        {
+            "short_name": "T2",
+            "camera_name": "Camera_02",
+            "layer_name": "SPOTLAR_OFERTA_T2",
+            "resolution": "1920x1080",
+            "filename": "T2_Camera02",
+            "render_type": "color",
+            "render_bool": true,
+            "preview_bool": false,
+            "folder_to_use": "T2",
+            "dest": "/storage/output"
+        },
+        {
+            "short_name": "T3_Preview",
+            "camera_name": "Camera_01",
+            "layer_name": "SPOTLAR_OFERTA_T3",
+            "resolution": "1920x1080",
+            "filename": "T3_Preview",
+            "render_type": "static",
+            "render_bool": true,
+            "preview_bool": true,
+            "folder_to_use": "T3",
+            "dest": "/storage/output"
+        },
+        {
+            "short_name": "Refraction_Test",
+            "camera_name": "Camera_03",
+            "layer_name": "SPOTLAR_OFERTA_T1, SPOTLAR_OFERTA_T2_i",
+            "resolution": "1920x1080",
+            "filename": "Refraction_Combined",
+            "render_type": "refraction",
+            "render_bool": true,
+            "preview_bool": false,
+            "folder_to_use": "Refraction",
+            "dest": "/storage/output"
+        }
+    ]
+}
