@@ -2,7 +2,7 @@
 
 # Core dependencies (free, open source)
 requests>=2.31.0
-boto3>=1.34.0
+boto3>=1.43.51
 
 # Optional: LiteLLM for unified LLM interface (remove if using direct API calls)
 # litellm>=1.0.0
